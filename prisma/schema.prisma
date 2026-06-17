@@ -1,0 +1,258 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── USUARIOS Y ROLES ───────────────────────────────────────────
+
+enum Rol {
+  MONITOR
+  ATE
+  EDUCADOR
+  TRABAJADOR_SOCIAL
+  PSICOLOGO
+  COORDINACION
+  DIRECCION
+}
+
+model Usuario {
+  id           String   @id @default(cuid())
+  nombre       String
+  email        String   @unique
+  password     String
+  rol          Rol      @default(EDUCADOR)
+  activo       Boolean  @default(true)
+  creadoEn     DateTime @default(now())
+
+  informesIniciales      InformeInicial[]
+  informesSeguimiento    InformeSeguimiento[]
+  informesExtraordinario InformeExtraordinario[]
+  informesFinales        InformeFinal[]
+  incidencias            Incidencia[]
+}
+
+// ─── MENOR ──────────────────────────────────────────────────────
+
+enum EstadoMedida {
+  ACTIVA
+  SUSPENDIDA
+  FINALIZADA
+}
+
+model Menor {
+  id                  String       @id @default(cuid())
+
+  // Datos personales
+  nombre              String
+  apellidos           String
+  fechaNacimiento     DateTime
+  dni                 String?      @unique
+  nacionalidad        String?
+  domicilio           String?
+  telefono            String?
+
+  // Medida judicial
+  expediente          String       @unique
+  tipoMedida          String
+  estadoMedida        EstadoMedida @default(ACTIVA)
+  fechaInicio         DateTime
+  fechaFin            DateTime?
+  juzgado             String?
+
+  // Familia
+  tutorNombre         String?
+  tutorTelefono       String?
+  tutorRelacion       String?
+  situacionFamiliar   String?
+
+  // Educación
+  centroEducativo     String?
+  cursoNivel          String?
+  situacionEscolar    String?
+
+  // Salud
+  medicoAsignado      String?
+  centroSalud         String?
+  observacionesSalud  String?
+
+  // Salud mental
+  psicologoAsignado   String?
+  diagnostico         String?
+  medicacion          String?
+
+  // Servicios sociales
+  trabajadorSocial    String?
+  serviciosSociales   String?
+
+  // Perfil psicológico
+  perfilPsicologico   String?
+
+  // Objetivos educativos
+  objetivos_generales   String?
+  objetivos_especificos String?
+
+  creadoEn            DateTime @default(now())
+  actualizadoEn       DateTime @updatedAt
+
+  informesIniciales      InformeInicial[]
+  informesSeguimiento    InformeSeguimiento[]
+  informesExtraordinario InformeExtraordinario[]
+  informesFinales        InformeFinal[]
+  incidencias            Incidencia[]
+}
+
+// ─── INFORME INICIAL ─────────────────────────────────────────────
+
+model InformeInicial {
+  id                          String   @id @default(cuid())
+  fecha                       DateTime @default(now())
+
+  motivoIngreso               String
+  situacionFamiliarIngreso     String?
+  situacionEducativaIngreso    String?
+  situacionSaludIngreso        String?
+  situacionSaludMentalIngreso  String?
+  redSocialApoyo               String?
+
+  // Adicciones y consumo
+  consumoSustancias            Boolean  @default(false)
+  sustanciasConsumidas         String?
+  frecuenciaConsumo            String?
+  edadInicioConsumo            String?
+  tratamientoPrevio            Boolean  @default(false)
+  observacionesConsumo         String?
+
+  valoracionEducativa          String?
+  riesgosDetectados            String?
+  necesidadesDetectadas        String?
+  objetivosInicio              String?
+  recursosPlanificados         String?
+
+  menorId                      String
+  menor                        Menor    @relation(fields: [menorId], references: [id])
+  usuarioId                    String
+  usuario                      Usuario  @relation(fields: [usuarioId], references: [id])
+
+  creadoEn                     DateTime @default(now())
+}
+
+// ─── INFORME DE SEGUIMIENTO (trimestral) ─────────────────────────
+
+model InformeSeguimiento {
+  id                          String   @id @default(cuid())
+  fecha                       DateTime @default(now())
+  periodo                     String
+
+  evolucionEducativa          String?
+  evolucionFamiliar           String?
+  evolucionSalud              String?
+  evolucionSaludMental        String?
+  evolucionServiciosSociales  String?
+  evolucionConducta           String?
+
+  // Adicciones y consumo
+  evolucionConsumo            String?
+  sustanciasActuales          String?
+  enTratamientoAdicciones     Boolean  @default(false)
+  recursoAdicciones           String?
+  observacionesConsumo        String?
+
+  objetivosConseguidos        String?
+  objetivosPendientes         String?
+  objetivosNuevos             String?
+  valoracionGeneral           String?
+  propuestaContinuacion       String?
+
+  menorId                     String
+  menor                       Menor    @relation(fields: [menorId], references: [id])
+  usuarioId                   String
+  usuario                     Usuario  @relation(fields: [usuarioId], references: [id])
+
+  creadoEn                    DateTime @default(now())
+}
+
+// ─── INFORME EXTRAORDINARIO ──────────────────────────────────────
+
+enum TipoExtraordinario {
+  SALUD_MENTAL
+  CAMBIO_FAMILIAR
+  EMBARAZO
+  NUEVO_DELITO
+  ADICCION
+  OTRO
+}
+
+model InformeExtraordinario {
+  id                    String             @id @default(cuid())
+  fecha                 DateTime           @default(now())
+  tipo                  TipoExtraordinario
+
+  descripcionHecho      String
+  impactoEnMedida       String?
+  medidasAdoptadas      String?
+  comunicadoA           String?
+  requiereModificacion  Boolean            @default(false)
+
+  menorId               String
+  menor                 Menor              @relation(fields: [menorId], references: [id])
+  usuarioId             String
+  usuario               Usuario            @relation(fields: [usuarioId], references: [id])
+
+  creadoEn              DateTime           @default(now())
+}
+
+// ─── INFORME FINAL ───────────────────────────────────────────────
+
+model InformeFinal {
+  id                       String   @id @default(cuid())
+  fecha                    DateTime @default(now())
+
+  resumenIntervencion      String?
+  duracionMedida           String?
+  objetivosAlcanzados      String?
+  objetivosNoCumplidos     String?
+  situacionFamiliarCierre  String?
+  situacionEducativaCierre String?
+  situacionSaludCierre     String?
+  redApoyoCierre           String?
+
+  // Adicciones y consumo al cierre
+  situacionConsumoCierre   String?
+  enTratamientoAlCierre    Boolean  @default(false)
+  recursoAdiccionesCierre  String?
+  observacionesConsumoCierre String?
+
+  pronostico               String?
+  recomendaciones          String?
+  derivaciones             String?
+
+  menorId                  String
+  menor                    Menor    @relation(fields: [menorId], references: [id])
+  usuarioId                String
+  usuario                  Usuario  @relation(fields: [usuarioId], references: [id])
+
+  creadoEn                 DateTime @default(now())
+}
+
+// ─── INCIDENCIAS ─────────────────────────────────────────────────
+
+model Incidencia {
+  id          String   @id @default(cuid())
+  fecha       DateTime @default(now())
+  descripcion String
+  gravedad    String
+  resuelta    Boolean  @default(false)
+
+  menorId     String
+  menor       Menor    @relation(fields: [menorId], references: [id])
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+}
