@@ -2,17 +2,27 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 // Get a free hosted Postgres database in seconds: `npx create-db`
+
+// schema.prisma — Plano completo de la base de datos.
+// Cada "model" se convierte en una tabla en PostgreSQL.
+// Prisma lee este archivo y genera el código TypeScript para interactuar con la BD.
+
+// Define dónde se genera el cliente TypeScript de Prisma
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
 }
 
+// Define qué tipo de base de datos usamos
+// La URL de conexión va en prisma.config.ts (cambio de Prisma 7)
 datasource db {
   provider = "postgresql"
 }
 
-// ─── USUARIOS Y ROLES ───────────────────────────────────────────
+// ─── ENUMS ───────────────────────────────────────────────────────
+// Los enums son listas de valores fijos — la BD solo acepta estos valores exactos
 
+// Roles de los profesionales del equipo
 enum Rol {
   MONITOR
   ATE
@@ -23,15 +33,42 @@ enum Rol {
   DIRECCION
 }
 
-model Usuario {
-  id           String   @id @default(cuid())
-  nombre       String
-  email        String   @unique
-  password     String
-  rol          Rol      @default(EDUCADOR)
-  activo       Boolean  @default(true)
-  creadoEn     DateTime @default(now())
+// Estado posible de la medida judicial del menor
+enum EstadoMedida {
+  ACTIVA
+  SUSPENDIDA
+  FINALIZADA
+}
 
+// Tipos de informe extraordinario — motivos que pueden alterar la medida
+enum TipoExtraordinario {
+  SALUD_MENTAL
+  CAMBIO_FAMILIAR
+  EMBARAZO
+  NUEVO_DELITO
+  ADICCION
+  OTRO
+}
+
+// ─── MODELO USUARIO ──────────────────────────────────────────────
+// Representa a cada profesional que usa la app
+
+model Usuario {
+  // @id — clave primaria de la tabla
+  // @default(cuid()) — genera un ID único automáticamente
+  id         String   @id @default(cuid())
+  nombre     String
+  // @unique — no pueden existir dos usuarios con el mismo email
+  email      String   @unique
+  password   String
+  rol        Rol      @default(EDUCADOR)
+  // Si está activo o dado de baja sin eliminar el registro
+  activo     Boolean  @default(true)
+  // @default(now()) — guarda la fecha y hora actual automáticamente
+  creadoEn   DateTime @default(now())
+
+  // Relaciones — un usuario puede crear muchos informes de cada tipo
+  // Estos campos no son columnas en la BD, son accesos virtuales de Prisma
   informesIniciales      InformeInicial[]
   informesSeguimiento    InformeSeguimiento[]
   informesExtraordinario InformeExtraordinario[]
@@ -39,18 +76,14 @@ model Usuario {
   incidencias            Incidencia[]
 }
 
-// ─── MENOR ──────────────────────────────────────────────────────
-
-enum EstadoMedida {
-  ACTIVA
-  SUSPENDIDA
-  FINALIZADA
-}
+// ─── MODELO MENOR ────────────────────────────────────────────────
+// Ficha completa de cada menor en el sistema
 
 model Menor {
   id                  String       @id @default(cuid())
 
-  // Datos personales
+  // Datos personales básicos
+  // El ? indica que el campo es opcional — puede estar vacío
   nombre              String
   apellidos           String
   fechaNacimiento     DateTime
@@ -59,7 +92,7 @@ model Menor {
   domicilio           String?
   telefono            String?
 
-  // Medida judicial
+  // Información sobre la medida judicial
   expediente          String       @unique
   tipoMedida          String
   estadoMedida        EstadoMedida @default(ACTIVA)
@@ -67,41 +100,43 @@ model Menor {
   fechaFin            DateTime?
   juzgado             String?
 
-  // Familia
+  // Información familiar
   tutorNombre         String?
   tutorTelefono       String?
   tutorRelacion       String?
   situacionFamiliar   String?
 
-  // Educación
+  // Situación educativa
   centroEducativo     String?
   cursoNivel          String?
   situacionEscolar    String?
 
-  // Salud
+  // Situación de salud física
   medicoAsignado      String?
   centroSalud         String?
   observacionesSalud  String?
 
-  // Salud mental
+  // Situación de salud mental
   psicologoAsignado   String?
   diagnostico         String?
   medicacion          String?
 
-  // Servicios sociales
+  // Situación con servicios sociales
   trabajadorSocial    String?
   serviciosSociales   String?
 
-  // Perfil psicológico
+  // Perfil psicológico general
   perfilPsicologico   String?
 
-  // Objetivos educativos
+  // Objetivos del plan de intervención educativa
   objetivos_generales   String?
   objetivos_especificos String?
 
   creadoEn            DateTime @default(now())
+  // @updatedAt — se actualiza automáticamente cada vez que se modifica el registro
   actualizadoEn       DateTime @updatedAt
 
+  // Relaciones — un menor puede tener muchos informes e incidencias
   informesIniciales      InformeInicial[]
   informesSeguimiento    InformeSeguimiento[]
   informesExtraordinario InformeExtraordinario[]
@@ -110,11 +145,13 @@ model Menor {
 }
 
 // ─── INFORME INICIAL ─────────────────────────────────────────────
+// Se crea cuando el menor ingresa en el centro
 
 model InformeInicial {
   id                          String   @id @default(cuid())
   fecha                       DateTime @default(now())
 
+  // Situación al ingreso
   motivoIngreso               String
   situacionFamiliarIngreso     String?
   situacionEducativaIngreso    String?
@@ -122,35 +159,42 @@ model InformeInicial {
   situacionSaludMentalIngreso  String?
   redSocialApoyo               String?
 
-  // Adicciones y consumo
+  // Adicciones y consumo de tóxicos al ingreso
   consumoSustancias            Boolean  @default(false)
-  sustanciasConsumidas         String?
+  sustanciasConsumidas         String?  // alcohol, cannabis, cocaína...
   frecuenciaConsumo            String?
   edadInicioConsumo            String?
   tratamientoPrevio            Boolean  @default(false)
   observacionesConsumo         String?
 
+  // Valoración inicial del equipo
   valoracionEducativa          String?
   riesgosDetectados            String?
   necesidadesDetectadas        String?
   objetivosInicio              String?
   recursosPlanificados         String?
 
+  // Relación con el menor — @relation conecta esta tabla con la tabla Menor
+  // fields: campo de esta tabla | references: campo de la tabla Menor
   menorId                      String
   menor                        Menor    @relation(fields: [menorId], references: [id])
+
+  // Relación con el usuario que redactó el informe
   usuarioId                    String
   usuario                      Usuario  @relation(fields: [usuarioId], references: [id])
 
   creadoEn                     DateTime @default(now())
 }
 
-// ─── INFORME DE SEGUIMIENTO (trimestral) ─────────────────────────
+// ─── INFORME DE SEGUIMIENTO ───────────────────────────────────────
+// Se realiza cada 3 meses durante el cumplimiento de la medida
 
 model InformeSeguimiento {
   id                          String   @id @default(cuid())
   fecha                       DateTime @default(now())
-  periodo                     String
+  periodo                     String   // ej: "1er trimestre 2025"
 
+  // Evolución por áreas de intervención
   evolucionEducativa          String?
   evolucionFamiliar           String?
   evolucionSalud              String?
@@ -158,16 +202,19 @@ model InformeSeguimiento {
   evolucionServiciosSociales  String?
   evolucionConducta           String?
 
-  // Adicciones y consumo
-  evolucionConsumo            String?
+  // Evolución en consumo de tóxicos
+  evolucionConsumo            String?  // mejora / estable / empeora
   sustanciasActuales          String?
   enTratamientoAdicciones     Boolean  @default(false)
-  recursoAdicciones           String?
+  recursoAdicciones           String?  // nombre del centro o programa
   observacionesConsumo        String?
 
+  // Revisión de objetivos del trimestre
   objetivosConseguidos        String?
   objetivosPendientes         String?
   objetivosNuevos             String?
+
+  // Valoración global y propuesta de continuación
   valoracionGeneral           String?
   propuestaContinuacion       String?
 
@@ -180,25 +227,20 @@ model InformeSeguimiento {
 }
 
 // ─── INFORME EXTRAORDINARIO ──────────────────────────────────────
-
-enum TipoExtraordinario {
-  SALUD_MENTAL
-  CAMBIO_FAMILIAR
-  EMBARAZO
-  NUEVO_DELITO
-  ADICCION
-  OTRO
-}
+// Se genera cuando ocurre algo relevante que puede afectar a la medida
 
 model InformeExtraordinario {
   id                    String             @id @default(cuid())
   fecha                 DateTime           @default(now())
+  // Tipo de situación extraordinaria usando el enum definido arriba
   tipo                  TipoExtraordinario
 
   descripcionHecho      String
   impactoEnMedida       String?
   medidasAdoptadas      String?
+  // A quién se ha comunicado: juzgado, familia, servicios sociales...
   comunicadoA           String?
+  // Si requiere modificación formal de la medida judicial
   requiereModificacion  Boolean            @default(false)
 
   menorId               String
@@ -210,26 +252,33 @@ model InformeExtraordinario {
 }
 
 // ─── INFORME FINAL ───────────────────────────────────────────────
+// Se redacta cuando el menor finaliza la medida y abandona el centro
 
 model InformeFinal {
   id                       String   @id @default(cuid())
   fecha                    DateTime @default(now())
 
+  // Resumen del proceso completo
   resumenIntervencion      String?
   duracionMedida           String?
+
+  // Balance de objetivos al cierre
   objetivosAlcanzados      String?
   objetivosNoCumplidos     String?
+
+  // Situación en todas las áreas al momento del cierre
   situacionFamiliarCierre  String?
   situacionEducativaCierre String?
   situacionSaludCierre     String?
   redApoyoCierre           String?
 
-  // Adicciones y consumo al cierre
-  situacionConsumoCierre   String?
-  enTratamientoAlCierre    Boolean  @default(false)
-  recursoAdiccionesCierre  String?
+  // Situación de consumo al cierre
+  situacionConsumoCierre    String?  // abstinente / reducción / sin cambios
+  enTratamientoAlCierre     Boolean  @default(false)
+  recursoAdiccionesCierre   String?
   observacionesConsumoCierre String?
 
+  // Pronóstico y recursos a los que se deriva al salir
   pronostico               String?
   recomendaciones          String?
   derivaciones             String?
@@ -243,12 +292,14 @@ model InformeFinal {
 }
 
 // ─── INCIDENCIAS ─────────────────────────────────────────────────
+// Registro de incidentes ocurridos durante la estancia
 
 model Incidencia {
   id          String   @id @default(cuid())
   fecha       DateTime @default(now())
   descripcion String
-  gravedad    String
+  gravedad    String   // leve / moderada / grave
+  // Si la incidencia ha sido resuelta o sigue abierta
   resuelta    Boolean  @default(false)
 
   menorId     String
