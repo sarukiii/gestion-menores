@@ -16,6 +16,9 @@ export default defineConfig({
   migrations: {
     // Carpeta donde se guardan los archivos SQL de cada migración
     path: "prisma/migrations",
+
+    // Comando que ejecuta Prisma al hacer "npx prisma db seed"
+    seed: "npx tsx prisma/seed.ts",
   },
 
   datasource: {

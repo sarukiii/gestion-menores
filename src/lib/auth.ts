@@ -1,75 +1,79 @@
-// auth.ts — Configuración central de NextAuth (Auth.js)
-// NextAuth es la librería que gestiona toda la autenticación de la app:
-// login, sesiones, tokens y control de acceso.
-// Este archivo es el corazón del sistema de autenticación.
+// auth.ts — Configuración COMPLETA de NextAuth (incluye Prisma y bcrypt)
+//
+// Este archivo es el que realmente gestiona el login: busca usuarios en
+// PostgreSQL, compara contraseñas cifradas y genera los tokens de sesión.
+//
+// IMPORTANTE: este archivo NUNCA debe importarse desde middleware.ts,
+// porque arrastra Prisma y rompería en Edge Runtime (ver auth.config.ts
+// para la explicación completa de por qué).
+//
+// Se usa en:
+// - La ruta API de NextAuth (src/app/api/auth/[...nextauth]/route.ts)
+// - Server Components y Server Actions que necesiten la sesión completa
 
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { authConfig } from "@/lib/auth.config";
 
-// NextAuth devuelve 4 elementos que exportamos para usar en toda la app:
-// - handlers: las rutas API del login (GET y POST)
-// - signIn: función para iniciar sesión
-// - signOut: función para cerrar sesión
-// - auth: función para obtener la sesión actual
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  // ESTRATEGIA DE SESIÓN
-  // "jwt" significa que la sesión se guarda en un token cifrado en el navegador
-  // La alternativa sería "database" (guardar sesiones en una tabla de BD)
-  // JWT es más sencillo y no requiere tabla adicional en PostgreSQL
+  // Heredamos la configuración ligera (páginas + reglas de autorización)
+  // y la combinamos con lo que solo puede vivir en entorno Node completo
+  ...authConfig,
+
+  // ESTRATEGIA DE SESIÓN: JWT
+  // La sesión se guarda como un token cifrado en el navegador,
+  // no en una tabla de la base de datos. Más simple de mantener
+  // y no requiere consultar la BD en cada petición para validar sesión.
   session: { strategy: "jwt" },
 
-  // PÁGINAS PERSONALIZADAS
-  // Le decimos a NextAuth dónde está nuestra página de login
-  // Sin esto, NextAuth usaría su propia página por defecto
-  pages: {
-    signIn: "/", // La ruta raíz "/" es nuestra pantalla de login
-  },
-
   // PROVEEDORES DE AUTENTICACIÓN
-  // Define cómo puede autenticarse un usuario
-  // Usamos "Credentials": email y contraseña propios
-  // Otras opciones serían Google, GitHub, Microsoft...
+  // "Credentials" = login propio con email/contraseña,
+  // en contraposición a login social (Google, GitHub, etc.)
   providers: [
     Credentials({
-      // Campos que espera recibir del formulario de login
+      // Campos que el formulario de login debe enviar
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Contraseña", type: "password" },
       },
 
-      // FUNCIÓN AUTHORIZE
-      // Se ejecuta cuando el usuario pulsa "Iniciar sesión"
-      // Recibe las credenciales del formulario
-      // Devuelve el usuario si el login es correcto, null si no
+      // FUNCIÓN AUTHORIZE — el corazón de la validación del login
+      // Se ejecuta cada vez que alguien intenta iniciar sesión.
+      // Debe devolver el usuario si las credenciales son correctas,
+      // o "null" si hay que rechazar el login (NextAuth no da detalles
+      // del motivo exacto al cliente, por seguridad).
       authorize: async (credentials) => {
-        // Paso 1: comprobamos que llegaron email y contraseña
+        // PASO 1 — Validación básica: ¿llegaron ambos campos?
         if (!credentials?.email || !credentials?.password) return null;
 
-        // Paso 2: buscamos el usuario en la base de datos por email
-        // findUnique busca exactamente un registro — email es único
+        // PASO 2 — Buscamos el usuario en PostgreSQL a través de Prisma
+        // findUnique funciona porque "email" tiene la restricción @unique
+        // en el modelo Usuario (ver prisma/schema.prisma)
         const usuario = await prisma.usuario.findUnique({
           where: { email: String(credentials.email) },
         });
 
-        // Paso 3: si no existe el usuario o está dado de baja, rechazamos
-        // "activo: false" es la forma de deshabilitar un usuario sin borrarlo
+        // PASO 3 — Rechazamos si no existe el usuario o está dado de baja
+        // El campo "activo" permite desactivar a un profesional sin
+        // borrar su historial de informes y seguimientos (trazabilidad)
         if (!usuario || !usuario.activo) return null;
 
-        // Paso 4: comparamos la contraseña introducida con el hash de la BD
-        // bcrypt.compare hace la comparación de forma segura
-        // Nunca se descifra el hash — bcrypt rehashea y compara
+        // PASO 4 — Comparamos la contraseña introducida con el hash guardado
+        // bcrypt.compare NUNCA descifra el hash (es irreversible por diseño):
+        // vuelve a cifrar la contraseña introducida con la misma sal
+        // y compara los resultados
         const passwordCorrecta = await bcrypt.compare(
           String(credentials.password),
           usuario.password,
         );
 
-        // Paso 5: si la contraseña no coincide, rechazamos
         if (!passwordCorrecta) return null;
 
-        // Paso 6: todo correcto — devolvemos los datos del usuario
-        // Estos datos se pasarán al token JWT en el callback "jwt"
+        // PASO 5 — Login correcto: devolvemos solo los datos necesarios
+        // ¡NUNCA devolver el hash de la contraseña aquí! Estos datos
+        // viajarán al callback "jwt" y de ahí al token del navegador.
         return {
           id: usuario.id,
           email: usuario.email,
@@ -80,32 +84,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
 
-  // CALLBACKS
-  // Funciones que se ejecutan automáticamente en momentos clave del flujo
   callbacks: {
-    // CALLBACK JWT
-    // Se ejecuta justo después del login y cada vez que se renueva el token
-    // "token" es el JWT actual, "user" son los datos devueltos por authorize
-    // Aquí añadimos id y rol al token para tenerlos disponibles en la sesión
+    // Mantenemos el callback "authorized" heredado de auth.config.ts
+    // y añadimos los callbacks que SÍ necesitan tocar el token completo
+    ...authConfig.callbacks,
+
+    // CALLBACK "jwt" — se ejecuta al crear o renovar el token
+    // "user" solo está disponible justo después del login (viene de authorize)
+    // En las siguientes peticiones "user" es undefined y el token ya
+    // mantiene los datos que guardamos aquí la primera vez
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id as string;
-        token.rol = user.rol; // rol viene de nuestro tipo personalizado
+        token.rol = user.rol; // tipado gracias a next-auth.d.ts
       }
-      return token; // devolvemos el token enriquecido con nuestros datos
+      return token;
     },
 
-    // CALLBACK SESSION
-    // Se ejecuta cuando cualquier parte de la app pide la sesión actual
-    // "session" es el objeto de sesión que verá la app
-    // "token" es el JWT con los datos que guardamos en el callback anterior
-    // Aquí pasamos id y rol del token a la sesión para usarlos en la UI
+    // CALLBACK "session" — se ejecuta cuando cualquier parte de la app
+    // pide la sesión actual (por ejemplo con el hook useSession())
+    // Aquí trasladamos id y rol del token a la sesión visible para la UI
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id as string;
         session.user.rol = token.rol as string;
       }
-      return session; // devolvemos la sesión enriquecida con nuestros datos
+      return session;
     },
   },
 });

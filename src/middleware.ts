@@ -1,41 +1,28 @@
 // middleware.ts — Guardián de rutas protegidas
 //
-// El middleware es código que se ejecuta ANTES de que Next.js
-// procese cualquier petición. Es el primer filtro que ve cada visita.
+// Se ejecuta en Edge Runtime, ANTES de que Next.js procese cualquier
+// petición. Es el primer filtro de seguridad de toda la aplicación.
 //
-// Su función aquí es proteger las rutas privadas:
-// si un usuario no autenticado intenta acceder al dashboard
-// o a cualquier página protegida, lo redirigimos al login.
-//
-// Next.js busca este archivo automáticamente en src/middleware.ts
+// CRÍTICO: este archivo solo puede importar auth.config.ts (versión
+// SIN Prisma). Si importase auth.ts directamente, la app rompería
+// porque Edge Runtime no soporta los módulos nativos de Node que
+// usa el cliente generado por Prisma 7.
+// (Explicación completa del problema en auth.config.ts)
 
-import { auth } from "@/lib/auth";
-import { NextResponse } from "next/server";
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth.config";
 
-// auth() actúa como middleware cuando se usa de esta forma
-export default auth((req) => {
-  const isLoggedIn = !!req.auth; // req.auth contiene la sesión si está autenticado
-  const isOnLoginPage = req.nextUrl.pathname === "/";
-
-  // RUTAS PROTEGIDAS — requieren autenticación
-  // Si el usuario no está autenticado y no está en el login, lo redirigimos
-  if (!isLoggedIn && !isOnLoginPage) {
-    return NextResponse.redirect(new URL("/", req.url));
-  }
-
-  // REDIRECCIÓN POST-LOGIN
-  // Si el usuario ya está autenticado y visita el login, lo mandamos al dashboard
-  if (isLoggedIn && isOnLoginPage) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
-  }
-
-  // En cualquier otro caso, dejamos pasar la petición
-  return NextResponse.next();
-});
+// Creamos una instancia de NextAuth SOLO con la config ligera
+// y usamos su función "auth" como middleware
+export const { auth: middleware } = NextAuth(authConfig);
+export default middleware;
 
 // CONFIGURACIÓN DEL MATCHER
-// Le dice a Next.js a qué rutas aplicar el middleware
-// Excluimos archivos estáticos, imágenes y la ruta API de NextAuth
+// Define a qué rutas se aplica este middleware.
+// Excluimos:
+// - api/auth: las propias rutas de login, no deben quedar bloqueadas
+// - _next/static y _next/image: archivos internos de Next.js
+// - favicon.ico y public: recursos estáticos
 export const config = {
   matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico|public).*)"],
 };
