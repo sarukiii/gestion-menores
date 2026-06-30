@@ -59,33 +59,33 @@ Es además el proyecto principal de portfolio en la transición profesional del 
 ## Arquitectura
 
 ```
-┌──────────────────────────────────────────────────────┐
+┌─────────────────────────────────────────────────────┐
 │                    CAPA CLIENTE                      │
 │  PC del centro (IP autorizada)  │  Móvil/PC externo  │
-│                                 │  (con permiso)     │
+│                                 │  (con permiso)      │
 └─────────────────┬───────────────┴────────────────────┘
                   │
 ┌─────────────────▼───────────────────────────────────┐
-│              CAPA SERVIDOR — Next.js + TypeScript   │
-│                                                     │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  │
-│  │  Auth.js    │  │  API Routes │  │  Middleware │  │
-│  │  Sesiones   │  │  REST/CRUD  │  │  Whitelist  │  │
-│  │  JWT, Roles │  │  Informes   │  │  IP         │  │
-│  └─────────────┘  └─────────────┘  └─────────────┘  │
-│                                                     │
+│              CAPA SERVIDOR — Next.js + TypeScript    │
+│                                                      │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐ │
+│  │  Auth.js    │  │  API Routes │  │  Middleware  │ │
+│  │  Sesiones   │  │  REST/CRUD  │  │  Whitelist   │ │
+│  │  JWT, Roles │  │  Informes   │  │  IP          │ │
+│  └─────────────┘  └─────────────┘  └─────────────┘ │
+│                                                      │
 │  ┌──────────────────────┐  ┌────────────────────┐   │
 │  │  Frontend React      │  │  Prisma ORM        │   │
 │  │  Tailwind CSS        │  │  Modelos, queries  │   │
 │  │  Fichas, búsqueda    │  │  Migraciones       │   │
 │  └──────────────────────┘  └────────────────────┘   │
-│                                                     │
-│  [ Contenedor Docker — Servidor on-premise ]        │
+│                                                      │
+│  [ Contenedor Docker — Servidor on-premise ]         │
 └─────────────────────────────────────────────────────┘
                   │
 ┌─────────────────▼───────────────────────────────────┐
-│              CAPA DATOS — PostgreSQL                │
-│  Menores │ Usuarios │ Informes │ Incidencias        │
+│              CAPA DATOS — PostgreSQL                 │
+│  Menores │ Usuarios │ Informes │ Incidencias         │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -165,22 +165,37 @@ El sistema de login está construido con **NextAuth.js (Auth.js)** usando el pro
 4. Si es correcta, se genera un **token JWT** con el id y el rol del usuario
 5. El **middleware** (`src/middleware.ts`) protege todas las rutas excepto el login: si no hay sesión válida, redirige a `/`
 
+### Decisión técnica: configuración dividida (Edge Runtime)
+
+Durante el desarrollo surgió un problema real al integrar Prisma 7 con el middleware de Next.js: el middleware se ejecuta en **Edge Runtime**, un entorno que no soporta módulos nativos de Node (`node:path`, `node:fs`) que usa internamente el cliente generado por Prisma. Importar `auth.ts` directamente desde el middleware rompía la aplicación con errores de módulo nativo no encontrado.
+
+**Solución aplicada** — se dividió la configuración de NextAuth en dos archivos:
+
+- `src/lib/auth.config.ts` — configuración ligera, sin Prisma. Solo páginas y reglas de autorización. Es lo único que se importa desde el middleware.
+- `src/lib/auth.ts` — configuración completa, con Prisma y bcrypt. Se usa en la ruta API y en Server Components, donde sí existe un entorno Node completo.
+
+Este patrón está recomendado en la documentación oficial de NextAuth para proyectos con middleware + ORM, y es la solución estándar a este problema en aplicaciones Next.js + Prisma en producción.
+
 ### Componentes del sistema
 
 | Archivo | Función |
 |---------|---------|
-| `src/lib/auth.ts` | Configuración central: proveedor, callbacks JWT/session |
+| `src/lib/auth.config.ts` | Configuración Edge-safe: páginas y reglas de autorización, sin Prisma |
+| `src/lib/auth.ts` | Configuración completa: proveedor Credentials, callbacks JWT/session |
 | `src/types/next-auth.d.ts` | Extiende los tipos de NextAuth para incluir el campo `rol` |
 | `src/app/api/auth/[...nextauth]/route.ts` | Endpoint API que procesa las peticiones de login/logout |
 | `src/middleware.ts` | Protege rutas privadas y redirige según estado de sesión |
 | `src/app/page.tsx` | Formulario de login conectado a `signIn()` de NextAuth |
+| `src/app/dashboard/page.tsx` | Primera pantalla protegida, muestra sesión real y rol del usuario |
+| `prisma/seed.ts` | Script para crear usuarios de prueba de forma reproducible |
 
 ### Seguridad implementada
 
 - Contraseñas cifradas con `bcryptjs` (hash, nunca texto plano)
-- Sesión en JWT firmado, sin tabla de sesiones en BD
-- Verificación de usuario activo (`activo: false` deshabilita sin borrar)
+- Sesión en JWT firmado con clave generada mediante `crypto.randomBytes(32)` — aleatoriedad criptográfica real, no una cadena de texto predecible
+- Verificación de usuario activo (`activo: false` deshabilita sin borrar, preservando trazabilidad histórica)
 - Rutas protegidas a nivel de middleware, antes de renderizar cualquier página
+- Separación de configuración Edge/Node para evitar exponer lógica de base de datos en el entorno menos confiable
 
 ---
 
@@ -292,13 +307,15 @@ Abre [http://localhost:3000](http://localhost:3000)
 - Migraciones y tablas creadas en PostgreSQL
 - Cliente de Prisma configurado con adaptador pg
 - Repositorio en GitHub
-- **Sistema de autenticación completo (NextAuth + JWT + bcrypt)**
-- **Middleware de protección de rutas**
-- **Formulario de login funcional conectado al backend**
+- **Sistema de autenticación completo y verificado end-to-end** (NextAuth + JWT + bcrypt)
+- **Middleware de protección de rutas**, separado en configuración Edge-safe (`auth.config.ts`) para evitar conflictos entre Prisma y Edge Runtime
+- **Formulario de login funcional** conectado al backend
+- **Seed script** (`prisma/seed.ts`) para generar usuarios de prueba de forma reproducible
+- **Dashboard principal** con sesión real, rol visible y logout funcional
+- Generación de `NEXTAUTH_SECRET` mediante el módulo `crypto` nativo de Node (32 bytes aleatorios), evitando claves predecibles
 
 ### 🔄 En progreso
-- Dashboard principal
-- CRUD de menores
+- CRUD de menores (listado, ficha, alta)
 
 ### 📋 Pendiente
 - Formularios de informes por tipo y sección de rol
@@ -307,7 +324,7 @@ Abre [http://localhost:3000](http://localhost:3000)
 - Exportación de informes a PDF
 - Restricción de acceso por IP (whitelist de dispositivos del centro)
 - Docker para despliegue en servidor on-premise
-- Seed de usuarios de prueba para testing
+- Migrar `middleware.ts` a la convención `proxy.ts` (deprecation aviso de Next.js 16)
 
 ---
 
@@ -316,8 +333,8 @@ Abre [http://localhost:3000](http://localhost:3000)
 | Fase | Contenido | Estado |
 |------|-----------|--------|
 | 1 | Setup, base de datos, login (interfaz) | ✅ Completada |
-| 2 | Autenticación real, middleware, sesiones | ✅ Completada |
-| 3 | Dashboard, CRUD menores | 🔄 En curso |
+| 2 | Autenticación real, middleware, sesiones, dashboard | ✅ Completada |
+| 3 | CRUD menores | 🔄 En curso |
 | 4 | Informes, seguimientos, incidencias | 📋 Pendiente |
 | 5 | Roles en UI, restricción IP, exportación PDF | 📋 Pendiente |
 | 6 | Docker, despliegue en servidor | 📋 Pendiente |
