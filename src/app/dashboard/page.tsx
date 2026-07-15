@@ -5,35 +5,34 @@
 // directamente en el servidor, antes de renderizar nada — más seguro
 // y más rápido que pedirla desde el cliente con un useEffect.
 
-import { auth } from "@/lib/auth";
-import { signOut } from "@/lib/auth";
+import { auth, signOut } from "@/lib/auth";
+import Link from "next/link";
+
+// Mapeo de roles técnicos a nombres legibles para mostrar en la UI
+// El enum de Prisma usa MAYÚSCULAS_CON_GUION, pero la UI debe ser amigable
+const nombresRol: Record<string, string> = {
+  MONITOR: "Monitor",
+  ATE: "ATE",
+  EDUCADOR: "Educador/a",
+  TRABAJADOR_SOCIAL: "Trabajador/a Social",
+  PSICOLOGO: "Psicólogo/a",
+  COORDINACION: "Coordinación",
+  DIRECCION: "Dirección",
+};
 
 export default async function DashboardPage() {
   // auth() en un Server Component nos da la sesión actual directamente.
   // Si llegamos hasta aquí es porque el middleware ya comprobó que existe,
-  // pero TypeScript no lo sabe, así que seguimos comprobando por seguridad.
+  // pero seguimos comprobando por seguridad — TypeScript no sabe que
+  // el middleware garantiza la sesión
   const session = await auth();
-
-  // Mapeo de roles técnicos a nombres legibles para mostrar en la UI
-  // El enum de Prisma usa MAYÚSCULAS_CON_GUION, pero la UI debe ser amigable
-  const nombresRol: Record<string, string> = {
-    MONITOR: "Monitor",
-    ATE: "ATE",
-    EDUCADOR: "Educador/a",
-    TRABAJADOR_SOCIAL: "Trabajador/a Social",
-    PSICOLOGO: "Psicólogo/a",
-    COORDINACION: "Coordinación",
-    DIRECCION: "Dirección",
-  };
 
   return (
     <main className="min-h-screen bg-gray-950">
       {/* Cabecera con datos del usuario y botón de cerrar sesión */}
       <header className="border-b border-gray-800 px-8 py-4 flex justify-between items-center">
         <div>
-          <h1 className="text-white font-bold text-lg">
-            Gestión de Menores
-          </h1>
+          <h1 className="text-white font-bold text-lg">Gestión de Menores</h1>
           <p className="text-gray-400 text-sm">
             {/* session?.user accede de forma segura por si fuera undefined */}
             {session?.user?.name} ·{" "}
@@ -41,10 +40,12 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        {/* Formulario de logout — NextAuth requiere un Server Action para esto */}
+        {/* Formulario de logout — NextAuth requiere un Server Action para esto.
+            Un Server Action es una función que se ejecuta en el servidor al
+            enviar el formulario, sin necesidad de una API Route explícita */}
         <form
           action={async () => {
-            "use server"; // se ejecuta en el servidor, no en el navegador
+            "use server"; // indica que esta función se ejecuta en el servidor
             await signOut({ redirectTo: "/" });
           }}
         >
@@ -59,28 +60,36 @@ export default async function DashboardPage() {
 
       {/* Contenido principal del dashboard */}
       <div className="p-8">
-        <h2 className="text-white text-2xl font-bold mb-2">
-          Panel principal
-        </h2>
+        <h2 className="text-white text-2xl font-bold mb-2">Panel principal</h2>
         <p className="text-gray-400 mb-8">
           Bienvenido/a de nuevo, {session?.user?.name}
         </p>
 
-        {/* Tarjetas de acceso rápido — placeholder hasta construir el resto */}
+        {/* Tarjetas de acceso rápido a las secciones principales.
+            La tarjeta de Menores es un Link clicable.
+            Las demás están deshabilitadas visualmente hasta que se construyan */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
+          {/* Tarjeta activa — enlaza al listado de menores */}
+          <Link
+            href="/menores"
+            className="bg-gray-900 rounded-2xl p-6 border border-gray-800 hover:border-blue-500/50 hover:bg-gray-800/50 transition-all"
+          >
             <h3 className="text-white font-semibold mb-1">Menores</h3>
             <p className="text-gray-400 text-sm">
-              Próximamente — listado y fichas
+              Listado y fichas de menores
             </p>
-          </div>
-          <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
+          </Link>
+
+          {/* Tarjeta deshabilitada — seguimientos pendientes de construir */}
+          <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800 opacity-50 cursor-not-allowed">
             <h3 className="text-white font-semibold mb-1">Seguimientos</h3>
             <p className="text-gray-400 text-sm">
               Próximamente — informes trimestrales
             </p>
           </div>
-          <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
+
+          {/* Tarjeta deshabilitada — incidencias pendientes de construir */}
+          <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800 opacity-50 cursor-not-allowed">
             <h3 className="text-white font-semibold mb-1">Incidencias</h3>
             <p className="text-gray-400 text-sm">
               Próximamente — registro de incidentes
