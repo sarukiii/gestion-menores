@@ -50,8 +50,16 @@ type Menor = {
   objetivos_especificos: string | null;
 };
 
+// Tipo para los informes iniciales que se muestran en la ficha
+// Solo necesitamos los campos básicos para el listado — no la ficha completa
+type InformeInicialResumen = {
+  id: string;
+  fecha: string;
+  motivoIngreso: string;
+  usuario: { nombre: string; rol: string };
+};
+
 // Estilos visuales para cada estado posible de la medida judicial
-// Centralizado aquí para no repetir clases en cada sitio donde se muestre
 const estiloEstado: Record<string, { texto: string; clase: string }> = {
   ACTIVA: { texto: "Activa", clase: "bg-green-500/10 text-green-400 border border-green-500/20" },
   SUSPENDIDA: { texto: "Suspendida", clase: "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20" },
@@ -59,7 +67,6 @@ const estiloEstado: Record<string, { texto: string; clase: string }> = {
 };
 
 // Formatea una fecha ISO a formato español (dd/mm/aaaa)
-// Se usa en modo lectura para mostrar fechas de forma legible
 function formatearFecha(fecha: string | null): string {
   if (!fecha) return "";
   return new Date(fecha).toLocaleDateString("es-ES");
@@ -73,8 +80,7 @@ function fechaParaInput(fecha: string | null): string {
 }
 
 // COMPONENTE Campo — muestra un dato en modo lectura o un input en modo edición
-// Definido FUERA del componente principal para evitar que React lo recree
-// en cada render, lo que causaría pérdida de foco al escribir
+// Definido FUERA del componente principal para evitar recreaciones en cada render
 function Campo({
   label,
   valor,
@@ -94,7 +100,6 @@ function Campo({
     <div>
       <p className="text-gray-400 text-xs mb-1">{label}</p>
       {editando ? (
-        // En modo edición mostramos un input para modificar el valor
         <input
           type={tipo}
           value={tipo === "date" ? fechaParaInput(valor) : (valor ?? "")}
@@ -102,7 +107,6 @@ function Campo({
           className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
         />
       ) : (
-        // En modo lectura mostramos el valor formateado
         // "—" cuando el campo está vacío para indicar que no hay dato
         <p className="text-white text-sm">
           {tipo === "date" ? formatearFecha(valor) : (valor || "—")}
@@ -113,7 +117,6 @@ function Campo({
 }
 
 // COMPONENTE Seccion — agrupa campos relacionados en un bloque visual
-// Definido fuera del componente principal por la misma razón que Campo
 function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6">
@@ -130,7 +133,6 @@ function Seccion({ titulo, children }: { titulo: string; children: React.ReactNo
 export default function FichaMenorPage() {
   const router = useRouter();
   // useParams extrae el segmento dinámico [id] de la URL actual
-  // Por ejemplo: /menores/abc123 → id = "abc123"
   const params = useParams();
   const id = params.id as string;
 
@@ -140,21 +142,36 @@ export default function FichaMenorPage() {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
-  // Cargamos la ficha completa del menor al montar el componente
+  // Lista de informes iniciales del menor — se carga junto con la ficha
+  const [informesIniciales, setInformesIniciales] = useState<InformeInicialResumen[]>([]);
+
+  // Cargamos la ficha y los informes al montar el componente
   // useEffect con [id] como dependencia se ejecuta cuando cambia el ID en la URL
   useEffect(() => {
-    const cargarMenor = async () => {
-      const respuesta = await fetch(`/api/menores/${id}`);
-      if (!respuesta.ok) {
+    const cargarDatos = async () => {
+      // Cargamos la ficha del menor
+      const respuestaMenor = await fetch(`/api/menores/${id}`);
+      if (!respuestaMenor.ok) {
         setError("No se pudo cargar la ficha del menor");
         setCargando(false);
         return;
       }
-      const datos = await respuesta.json();
-      setMenor(datos);
+      const datosMenor = await respuestaMenor.json();
+      setMenor(datosMenor);
+
+      // Cargamos los informes iniciales en paralelo con la ficha
+      // para no hacer dos peticiones secuenciales innecesarias
+      const respuestaInformes = await fetch(
+        `/api/informes/inicial?menorId=${id}`
+      );
+      if (respuestaInformes.ok) {
+        const datosInformes = await respuestaInformes.json();
+        setInformesIniciales(datosInformes);
+      }
+
       setCargando(false);
     };
-    cargarMenor();
+    cargarDatos();
   }, [id]);
 
   // Actualiza un campo concreto del objeto menor en el estado local
@@ -199,7 +216,6 @@ export default function FichaMenorPage() {
     setEditando(false);
   };
 
-  // Estados de carga y error — se muestran antes del contenido principal
   if (cargando) {
     return (
       <main className="min-h-screen bg-gray-950 flex items-center justify-center">
@@ -218,7 +234,6 @@ export default function FichaMenorPage() {
 
   if (!menor) return null;
 
-  // Buscamos el estilo del estado actual o usamos un estilo neutro por defecto
   const estado = estiloEstado[menor.estadoMedida] ?? {
     texto: menor.estadoMedida,
     clase: "bg-gray-500/10 text-gray-400",
@@ -231,7 +246,6 @@ export default function FichaMenorPage() {
         {/* CABECERA — nombre, expediente, estado y botones de acción */}
         <div className="flex justify-between items-start mb-6">
           <div>
-            {/* Enlace de vuelta al listado */}
             <Link
               href="/menores"
               className="text-gray-400 hover:text-white text-sm mb-2 inline-block transition-colors"
@@ -249,22 +263,6 @@ export default function FichaMenorPage() {
                 {estado.texto}
               </span>
             </div>
-
-            {/* ACCESO RÁPIDO A INFORMES
-                Solo visible en modo lectura — en modo edición no tiene sentido
-                navegar a otra página con cambios sin guardar.
-                Cada botón lleva al formulario del tipo de informe correspondiente.
-                A medida que se construyan más tipos de informe, se añaden aquí. */}
-            {!editando && (
-              <div className="flex gap-2 mt-3">
-                <Link
-                  href={`/menores/${id}/informes/inicial`}
-                  className="text-sm bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
-                >
-                  + Informe inicial
-                </Link>
-              </div>
-            )}
           </div>
 
           {/* Botones de edición / guardado */}
@@ -302,8 +300,7 @@ export default function FichaMenorPage() {
           </div>
         )}
 
-        {/* Selector de estado — solo visible en modo edición
-            Separado del resto de campos porque afecta al flujo judicial */}
+        {/* Selector de estado — solo visible en modo edición */}
         {editando && (
           <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4 mb-4 flex items-center gap-4">
             <p className="text-gray-400 text-sm">Estado de la medida:</p>
@@ -374,6 +371,56 @@ export default function FichaMenorPage() {
             <Campo label="Objetivos generales" valor={menor.objetivos_generales} campo="objetivos_generales" editando={editando} onChange={actualizarCampo} />
             <Campo label="Objetivos específicos" valor={menor.objetivos_especificos} campo="objetivos_especificos" editando={editando} onChange={actualizarCampo} />
           </Seccion>
+
+          {/* SECCIÓN DE INFORMES
+              Muestra los informes ya creados para este menor.
+              Se carga en paralelo con la ficha al montar el componente.
+              A medida que se añadan más tipos de informe, se listan aquí. */}
+          <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+            <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-800">
+              <h3 className="text-white font-semibold">Informes</h3>
+              {/* El botón de nuevo informe solo aparece en modo lectura
+                  para evitar navegar fuera con cambios sin guardar */}
+              {!editando && (
+                <Link
+                  href={`/menores/${id}/informes/inicial`}
+                  className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  + Informe inicial
+                </Link>
+              )}
+            </div>
+
+            {/* Estado vacío — cuando todavía no hay ningún informe */}
+            {informesIniciales.length === 0 ? (
+              <p className="text-gray-400 text-sm">
+                No hay informes registrados todavía.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {informesIniciales.map((informe) => (
+                  <div
+                    key={informe.id}
+                    className="flex items-center justify-between p-3 bg-gray-800 rounded-lg"
+                  >
+                    <div>
+                      <p className="text-white text-sm font-medium">
+                        Informe inicial
+                      </p>
+                      <p className="text-gray-400 text-xs mt-0.5">
+                        {/* Fecha en formato español y nombre del profesional que lo redactó */}
+                        {new Date(informe.fecha).toLocaleDateString("es-ES")} ·{" "}
+                        {informe.usuario.nombre}
+                      </p>
+                    </div>
+                    <span className="text-xs text-gray-500 bg-gray-700 px-2 py-1 rounded">
+                      Inicial
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </main>
