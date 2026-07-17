@@ -7,11 +7,11 @@
 // modo lectura / modo edición, estado del formulario, etc.
 // Los datos se cargan desde la API al montar el componente.
 
-"use client";
+"use client"; // indica a Next.js que este componente se ejecuta en el navegador
 
-import { useState, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
-import Link from "next/link";
+import { useState, useEffect } from "react"; // hooks de React para estado y efectos
+import { useRouter, useParams } from "next/navigation"; // hooks de Next.js para navegación y parámetros de URL
+import Link from "next/link"; // componente de Next.js para enlaces internos sin recarga de página
 
 // Tipo que representa la ficha completa de un menor
 // Coincide exactamente con el modelo Menor de Prisma
@@ -50,7 +50,8 @@ type Menor = {
   objetivos_especificos: string | null;
 };
 
-// Estilos para cada estado de la medida judicial
+// Estilos visuales para cada estado posible de la medida judicial
+// Centralizado aquí para no repetir clases en cada sitio donde se muestre
 const estiloEstado: Record<string, { texto: string; clase: string }> = {
   ACTIVA: { texto: "Activa", clase: "bg-green-500/10 text-green-400 border border-green-500/20" },
   SUSPENDIDA: { texto: "Suspendida", clase: "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20" },
@@ -58,20 +59,22 @@ const estiloEstado: Record<string, { texto: string; clase: string }> = {
 };
 
 // Formatea una fecha ISO a formato español (dd/mm/aaaa)
-// o devuelve cadena vacía si no hay fecha
+// Se usa en modo lectura para mostrar fechas de forma legible
 function formatearFecha(fecha: string | null): string {
   if (!fecha) return "";
   return new Date(fecha).toLocaleDateString("es-ES");
 }
 
 // Extrae solo la parte de la fecha (aaaa-mm-dd) para inputs type="date"
+// Los inputs de fecha en HTML esperan formato ISO, no formato español
 function fechaParaInput(fecha: string | null): string {
   if (!fecha) return "";
   return new Date(fecha).toISOString().split("T")[0];
 }
 
 // COMPONENTE Campo — muestra un dato en modo lectura o un input en modo edición
-// Definido fuera del componente principal para evitar recreaciones en cada render
+// Definido FUERA del componente principal para evitar que React lo recree
+// en cada render, lo que causaría pérdida de foco al escribir
 function Campo({
   label,
   valor,
@@ -91,6 +94,7 @@ function Campo({
     <div>
       <p className="text-gray-400 text-xs mb-1">{label}</p>
       {editando ? (
+        // En modo edición mostramos un input para modificar el valor
         <input
           type={tipo}
           value={tipo === "date" ? fechaParaInput(valor) : (valor ?? "")}
@@ -98,6 +102,8 @@ function Campo({
           className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
         />
       ) : (
+        // En modo lectura mostramos el valor formateado
+        // "—" cuando el campo está vacío para indicar que no hay dato
         <p className="text-white text-sm">
           {tipo === "date" ? formatearFecha(valor) : (valor || "—")}
         </p>
@@ -107,6 +113,7 @@ function Campo({
 }
 
 // COMPONENTE Seccion — agrupa campos relacionados en un bloque visual
+// Definido fuera del componente principal por la misma razón que Campo
 function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6">
@@ -122,7 +129,8 @@ function Seccion({ titulo, children }: { titulo: string; children: React.ReactNo
 
 export default function FichaMenorPage() {
   const router = useRouter();
-  // useParams extrae el [id] de la URL actual
+  // useParams extrae el segmento dinámico [id] de la URL actual
+  // Por ejemplo: /menores/abc123 → id = "abc123"
   const params = useParams();
   const id = params.id as string;
 
@@ -132,7 +140,8 @@ export default function FichaMenorPage() {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
-  // Cargamos la ficha del menor al montar el componente
+  // Cargamos la ficha completa del menor al montar el componente
+  // useEffect con [id] como dependencia se ejecuta cuando cambia el ID en la URL
   useEffect(() => {
     const cargarMenor = async () => {
       const respuesta = await fetch(`/api/menores/${id}`);
@@ -149,13 +158,14 @@ export default function FichaMenorPage() {
   }, [id]);
 
   // Actualiza un campo concreto del objeto menor en el estado local
+  // No guarda en la BD todavía — eso ocurre al pulsar "Guardar cambios"
   const actualizarCampo = (campo: string, valor: string) => {
     setMenor((anterior) =>
       anterior ? { ...anterior, [campo]: valor } : anterior
     );
   };
 
-  // Envía los cambios a la API y sale del modo edición
+  // Envía todos los cambios a la API (PUT) y sale del modo edición
   const handleGuardar = async () => {
     if (!menor) return;
     setGuardando(true);
@@ -179,6 +189,7 @@ export default function FichaMenorPage() {
   };
 
   // Cancela la edición recargando los datos originales desde la API
+  // Así descartamos cualquier cambio no guardado
   const handleCancelar = async () => {
     setCargando(true);
     const respuesta = await fetch(`/api/menores/${id}`);
@@ -188,6 +199,7 @@ export default function FichaMenorPage() {
     setEditando(false);
   };
 
+  // Estados de carga y error — se muestran antes del contenido principal
   if (cargando) {
     return (
       <main className="min-h-screen bg-gray-950 flex items-center justify-center">
@@ -206,6 +218,7 @@ export default function FichaMenorPage() {
 
   if (!menor) return null;
 
+  // Buscamos el estilo del estado actual o usamos un estilo neutro por defecto
   const estado = estiloEstado[menor.estadoMedida] ?? {
     texto: menor.estadoMedida,
     clase: "bg-gray-500/10 text-gray-400",
@@ -215,10 +228,10 @@ export default function FichaMenorPage() {
     <main className="min-h-screen bg-gray-950 p-8">
       <div className="max-w-4xl mx-auto">
 
-        {/* Cabecera con nombre, estado y acciones */}
+        {/* CABECERA — nombre, expediente, estado y botones de acción */}
         <div className="flex justify-between items-start mb-6">
           <div>
-            {/* Enlace para volver al listado */}
+            {/* Enlace de vuelta al listado */}
             <Link
               href="/menores"
               className="text-gray-400 hover:text-white text-sm mb-2 inline-block transition-colors"
@@ -236,9 +249,25 @@ export default function FichaMenorPage() {
                 {estado.texto}
               </span>
             </div>
+
+            {/* ACCESO RÁPIDO A INFORMES
+                Solo visible en modo lectura — en modo edición no tiene sentido
+                navegar a otra página con cambios sin guardar.
+                Cada botón lleva al formulario del tipo de informe correspondiente.
+                A medida que se construyan más tipos de informe, se añaden aquí. */}
+            {!editando && (
+              <div className="flex gap-2 mt-3">
+                <Link
+                  href={`/menores/${id}/informes/inicial`}
+                  className="text-sm bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  + Informe inicial
+                </Link>
+              </div>
+            )}
           </div>
 
-          {/* Botones de edición */}
+          {/* Botones de edición / guardado */}
           <div className="flex gap-2">
             {editando ? (
               <>
@@ -273,7 +302,8 @@ export default function FichaMenorPage() {
           </div>
         )}
 
-        {/* Selector de estado — solo visible en modo edición */}
+        {/* Selector de estado — solo visible en modo edición
+            Separado del resto de campos porque afecta al flujo judicial */}
         {editando && (
           <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4 mb-4 flex items-center gap-4">
             <p className="text-gray-400 text-sm">Estado de la medida:</p>
@@ -289,7 +319,7 @@ export default function FichaMenorPage() {
           </div>
         )}
 
-        {/* Secciones de la ficha */}
+        {/* SECCIONES DE LA FICHA */}
         <div className="space-y-4">
           <Seccion titulo="Datos personales">
             <Campo label="Nombre" valor={menor.nombre} campo="nombre" editando={editando} onChange={actualizarCampo} />

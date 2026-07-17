@@ -8,8 +8,8 @@
 // Esto es más eficiente que hacer fetch a /api/menores desde el cliente:
 // nos ahorramos una petición HTTP completa al renderizar la página inicial.
 
-import { prisma } from "@/lib/prisma";
-import Link from "next/link";
+import { prisma } from "@/lib/prisma"; // Prisma Client para acceder a la base de datos
+import Link from "next/link"; // Componente de Next.js para enlaces internos (sin recargar la página)
 
 // Mapeo de estados técnicos a etiquetas legibles con color asociado
 // Centralizarlo aquí evita repetir esta lógica en cada sitio donde

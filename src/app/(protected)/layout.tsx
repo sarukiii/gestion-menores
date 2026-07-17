@@ -11,14 +11,14 @@
 // Es un Server Component porque obtiene la sesión en el servidor
 // para pasársela al Sidebar como props.
 
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import Sidebar from "@/components/layout/Sidebar";
+import { auth } from "@/lib/auth"; // función que obtiene la sesión del usuario desde el servidor
+import { redirect } from "next/navigation"; // función de Next.js para redirigir al usuario a otra página
+import Sidebar from "@/components/layout/Sidebar"; // componente del sidebar que se renderiza en todas las páginas interiores
 
-export default async function ProtectedLayout({
+export default async function ProtectedLayout({ //exporta un componente de layout protegido que recibe como props los children (contenido de la página actual)
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode; // los children son el contenido de la página actual que se está renderizando dentro del layout
 }) {
   // Doble verificación de sesión — el middleware ya protege las rutas,
   // pero añadimos esta comprobación como capa extra de seguridad

@@ -4,10 +4,11 @@
 // y la navegación, esta página solo contiene el contenido específico
 // del dashboard — más limpio y con responsabilidades bien separadas.
 
-import { auth } from "@/lib/auth";
-import Link from "next/link";
+import { auth } from "@/lib/auth";  // Verifica sesión y devuelve datos del usuario
+import Link from "next/link"; // Componente de Next.js para enlaces internos (client-side navigation)
 
-export default async function DashboardPage() {
+export default async function DashboardPage() { // Función asíncrona porque necesitamos esperar a la verificación de sesión
+  // Verificamos sesión y obtenemos datos del usuario
   const session = await auth();
 
   return (

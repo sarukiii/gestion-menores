@@ -11,9 +11,9 @@
 // IMPORTANTE: este archivo no se toca — solo importa y exporta los handlers.
 // Toda la lógica está en src/lib/auth.ts
 
-import { handlers } from "@/lib/auth";
+import { handlers } from "@/lib/auth"; // Importamos los handlers de NextAuth que definimos en auth.ts
 
 // Exportamos GET y POST para que Next.js sepa qué métodos HTTP acepta esta ruta
 // GET: para obtener la sesión actual
 // POST: para procesar el login y el logout
-export const { GET, POST } = handlers;
+export const { GET, POST } = handlers; // Exportamos los handlers de NextAuth para que Next.js los use en esta ruta
