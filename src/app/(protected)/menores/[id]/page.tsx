@@ -1,20 +1,16 @@
+"use client";
+
 // page.tsx — Ficha individual de un menor (ruta "/menores/[id]")
 //
 // Muestra todos los datos de un menor organizados por secciones,
 // con posibilidad de editar directamente cada campo.
-//
-// Es un Client Component porque necesitamos interactividad:
-// modo lectura / modo edición, estado del formulario, etc.
-// Los datos se cargan desde la API al montar el componente.
+// Incluye también la sección de informes donde se listan todos los
+// informes creados para este menor y se puede crear uno nuevo.
 
-"use client"; // indica a Next.js que este componente se ejecuta en el navegador
+import { useState, useEffect } from "react";
+import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
 
-import { useState, useEffect } from "react"; // hooks de React para estado y efectos
-import { useRouter, useParams } from "next/navigation"; // hooks de Next.js para navegación y parámetros de URL
-import Link from "next/link"; // componente de Next.js para enlaces internos sin recarga de página
-
-// Tipo que representa la ficha completa de un menor
-// Coincide exactamente con el modelo Menor de Prisma
 type Menor = {
   id: string;
   nombre: string;
@@ -50,13 +46,17 @@ type Menor = {
   objetivos_especificos: string | null;
 };
 
-// Tipo para los informes iniciales que se muestran en la ficha
-// Solo necesitamos los campos básicos para el listado — no la ficha completa
-type InformeInicialResumen = {
+// Tipos para los resúmenes de cada tipo de informe en la ficha
+// Solo necesitamos los campos básicos para el listado
+type InformeResumen = {
   id: string;
   fecha: string;
-  motivoIngreso: string;
   usuario: { nombre: string; rol: string };
+  tipo: "Inicial" | "Seguimiento" | "Extraordinario" | "Final";
+  // Campos opcionales según el tipo de informe
+  motivoIngreso?: string;
+  periodo?: string;
+  tipoExtraordinario?: string;
 };
 
 // Estilos visuales para cada estado posible de la medida judicial
@@ -66,34 +66,40 @@ const estiloEstado: Record<string, { texto: string; clase: string }> = {
   FINALIZADA: { texto: "Finalizada", clase: "bg-gray-500/10 text-gray-400 border border-gray-500/20" },
 };
 
-// Formatea una fecha ISO a formato español (dd/mm/aaaa)
+// Estilos para los badges de tipo de informe
+const estiloTipoInforme: Record<string, string> = {
+  Inicial: "bg-gray-700 text-gray-300",
+  Seguimiento: "bg-blue-500/10 text-blue-400",
+  Extraordinario: "bg-red-500/10 text-red-400",
+  Final: "bg-purple-500/10 text-purple-400",
+};
+
+// Mapeo de tipos de informe extraordinario a etiquetas legibles
+const etiquetasExtraordinario: Record<string, string> = {
+  SALUD_MENTAL: "Salud mental",
+  CAMBIO_FAMILIAR: "Cambio familiar",
+  EMBARAZO: "Embarazo",
+  NUEVO_DELITO: "Nuevo delito",
+  ADICCION: "Adicción",
+  OTRO: "Otro",
+};
+
 function formatearFecha(fecha: string | null): string {
   if (!fecha) return "";
   return new Date(fecha).toLocaleDateString("es-ES");
 }
 
-// Extrae solo la parte de la fecha (aaaa-mm-dd) para inputs type="date"
-// Los inputs de fecha en HTML esperan formato ISO, no formato español
 function fechaParaInput(fecha: string | null): string {
   if (!fecha) return "";
   return new Date(fecha).toISOString().split("T")[0];
 }
 
-// COMPONENTE Campo — muestra un dato en modo lectura o un input en modo edición
-// Definido FUERA del componente principal para evitar recreaciones en cada render
+// COMPONENTE Campo — modo lectura o edición según el estado
 function Campo({
-  label,
-  valor,
-  campo,
-  tipo = "text",
-  editando,
-  onChange,
+  label, valor, campo, tipo = "text", editando, onChange,
 }: {
-  label: string;
-  valor: string | null;
-  campo: string;
-  tipo?: string;
-  editando: boolean;
+  label: string; valor: string | null; campo: string;
+  tipo?: string; editando: boolean;
   onChange: (campo: string, valor: string) => void;
 }) {
   return (
@@ -107,7 +113,6 @@ function Campo({
           className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
         />
       ) : (
-        // "—" cuando el campo está vacío para indicar que no hay dato
         <p className="text-white text-sm">
           {tipo === "date" ? formatearFecha(valor) : (valor || "—")}
         </p>
@@ -116,23 +121,18 @@ function Campo({
   );
 }
 
-// COMPONENTE Seccion — agrupa campos relacionados en un bloque visual
+// COMPONENTE Seccion — agrupa campos relacionados
 function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6">
-      <h3 className="text-white font-semibold mb-4 pb-3 border-b border-gray-800">
-        {titulo}
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {children}
-      </div>
+      <h3 className="text-white font-semibold mb-4 pb-3 border-b border-gray-800">{titulo}</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{children}</div>
     </div>
   );
 }
 
 export default function FichaMenorPage() {
   const router = useRouter();
-  // useParams extrae el segmento dinámico [id] de la URL actual
   const params = useParams();
   const id = params.id as string;
 
@@ -142,11 +142,9 @@ export default function FichaMenorPage() {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
-  // Lista de informes iniciales del menor — se carga junto con la ficha
-  const [informesIniciales, setInformesIniciales] = useState<InformeInicialResumen[]>([]);
+  // Lista unificada de todos los informes del menor
+  const [informes, setInformes] = useState<InformeResumen[]>([]);
 
-  // Cargamos la ficha y los informes al montar el componente
-  // useEffect con [id] como dependencia se ejecuta cuando cambia el ID en la URL
   useEffect(() => {
     const cargarDatos = async () => {
       // Cargamos la ficha del menor
@@ -156,33 +154,52 @@ export default function FichaMenorPage() {
         setCargando(false);
         return;
       }
-      const datosMenor = await respuestaMenor.json();
-      setMenor(datosMenor);
+      setMenor(await respuestaMenor.json());
 
-      // Cargamos los informes iniciales en paralelo con la ficha
-      // para no hacer dos peticiones secuenciales innecesarias
-      const respuestaInformes = await fetch(
-        `/api/informes/inicial?menorId=${id}`
-      );
-      if (respuestaInformes.ok) {
-        const datosInformes = await respuestaInformes.json();
-        setInformesIniciales(datosInformes);
-      }
+      // Cargamos los cuatro tipos de informe en paralelo con Promise.all
+      // Esto lanza las cuatro peticiones a la vez en lugar de secuencialmente,
+      // reduciendo el tiempo de carga total considerablemente
+      const [resIniciales, resSeguimiento, resExtraordinario, resFinal] =
+        await Promise.all([
+          fetch(`/api/informes/inicial?menorId=${id}`),
+          fetch(`/api/informes/seguimiento?menorId=${id}`),
+          fetch(`/api/informes/extraordinario?menorId=${id}`),
+          fetch(`/api/informes/final?menorId=${id}`),
+        ]);
 
+      // Procesamos cada respuesta y añadimos el tipo para identificarlos
+      const iniciales = resIniciales.ok
+        ? (await resIniciales.json()).map((i: any) => ({ ...i, tipo: "Inicial" as const }))
+        : [];
+      const seguimiento = resSeguimiento.ok
+        ? (await resSeguimiento.json()).map((i: any) => ({ ...i, tipo: "Seguimiento" as const }))
+        : [];
+      const extraordinario = resExtraordinario.ok
+        ? (await resExtraordinario.json()).map((i: any) => ({
+            ...i,
+            tipo: "Extraordinario" as const,
+            tipoExtraordinario: i.tipo,
+          }))
+        : [];
+      const final = resFinal.ok
+        ? (await resFinal.json()).map((i: any) => ({ ...i, tipo: "Final" as const }))
+        : [];
+
+      // Combinamos todos los informes y los ordenamos cronológicamente
+      // del más reciente al más antiguo
+      const todos = [...iniciales, ...seguimiento, ...extraordinario, ...final]
+        .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+
+      setInformes(todos);
       setCargando(false);
     };
     cargarDatos();
   }, [id]);
 
-  // Actualiza un campo concreto del objeto menor en el estado local
-  // No guarda en la BD todavía — eso ocurre al pulsar "Guardar cambios"
   const actualizarCampo = (campo: string, valor: string) => {
-    setMenor((anterior) =>
-      anterior ? { ...anterior, [campo]: valor } : anterior
-    );
+    setMenor((anterior) => anterior ? { ...anterior, [campo]: valor } : anterior);
   };
 
-  // Envía todos los cambios a la API (PUT) y sale del modo edición
   const handleGuardar = async () => {
     if (!menor) return;
     setGuardando(true);
@@ -205,13 +222,10 @@ export default function FichaMenorPage() {
     setEditando(false);
   };
 
-  // Cancela la edición recargando los datos originales desde la API
-  // Así descartamos cualquier cambio no guardado
   const handleCancelar = async () => {
     setCargando(true);
     const respuesta = await fetch(`/api/menores/${id}`);
-    const datos = await respuesta.json();
-    setMenor(datos);
+    setMenor(await respuesta.json());
     setCargando(false);
     setEditando(false);
   };
@@ -243,36 +257,27 @@ export default function FichaMenorPage() {
     <main className="min-h-screen bg-gray-950 p-8">
       <div className="max-w-4xl mx-auto">
 
-        {/* CABECERA — nombre, expediente, estado y botones de acción */}
+        {/* CABECERA */}
         <div className="flex justify-between items-start mb-6">
           <div>
-            <Link
-              href="/menores"
-              className="text-gray-400 hover:text-white text-sm mb-2 inline-block transition-colors"
-            >
+            <Link href="/menores" className="text-gray-400 hover:text-white text-sm mb-2 inline-block transition-colors">
               ← Volver al listado
             </Link>
             <h1 className="text-white text-2xl font-bold">
               {menor.nombre} {menor.apellidos}
             </h1>
             <div className="flex items-center gap-3 mt-1">
-              <span className="text-gray-400 text-sm">
-                Expediente: {menor.expediente}
-              </span>
+              <span className="text-gray-400 text-sm">Expediente: {menor.expediente}</span>
               <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${estado.clase}`}>
                 {estado.texto}
               </span>
             </div>
           </div>
 
-          {/* Botones de edición / guardado */}
           <div className="flex gap-2">
             {editando ? (
               <>
-                <button
-                  onClick={handleCancelar}
-                  className="px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors"
-                >
+                <button onClick={handleCancelar} className="px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors">
                   Cancelar
                 </button>
                 <button
@@ -300,7 +305,6 @@ export default function FichaMenorPage() {
           </div>
         )}
 
-        {/* Selector de estado — solo visible en modo edición */}
         {editando && (
           <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4 mb-4 flex items-center gap-4">
             <p className="text-gray-400 text-sm">Estado de la medida:</p>
@@ -373,48 +377,51 @@ export default function FichaMenorPage() {
           </Seccion>
 
           {/* SECCIÓN DE INFORMES
-              Muestra los informes ya creados para este menor.
-              Se carga en paralelo con la ficha al montar el componente.
-              A medida que se añadan más tipos de informe, se listan aquí. */}
+              Lista todos los informes del menor ordenados por fecha.
+              Los botones de creación solo aparecen en modo lectura. */}
           <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6">
             <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-800">
               <h3 className="text-white font-semibold">Informes</h3>
-              {/* El botón de nuevo informe solo aparece en modo lectura
-                  para evitar navegar fuera con cambios sin guardar */}
               {!editando && (
-                <Link
-                  href={`/menores/${id}/informes/inicial`}
-                  className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  + Informe inicial
-                </Link>
+                <div className="flex gap-2 flex-wrap">
+                  <Link href={`/menores/${id}/informes/inicial`} className="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    + Inicial
+                  </Link>
+                  <Link href={`/menores/${id}/informes/seguimiento`} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    + Seguimiento
+                  </Link>
+                  <Link href={`/menores/${id}/informes/extraordinario`} className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    + Extraordinario
+                  </Link>
+                  <Link href={`/menores/${id}/informes/final`} className="text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    + Final
+                  </Link>
+                </div>
               )}
             </div>
 
-            {/* Estado vacío — cuando todavía no hay ningún informe */}
-            {informesIniciales.length === 0 ? (
-              <p className="text-gray-400 text-sm">
-                No hay informes registrados todavía.
-              </p>
+            {informes.length === 0 ? (
+              <p className="text-gray-400 text-sm">No hay informes registrados todavía.</p>
             ) : (
               <div className="space-y-2">
-                {informesIniciales.map((informe) => (
-                  <div
-                    key={informe.id}
-                    className="flex items-center justify-between p-3 bg-gray-800 rounded-lg"
-                  >
+                {informes.map((informe) => (
+                  <div key={informe.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
                     <div>
                       <p className="text-white text-sm font-medium">
-                        Informe inicial
+                        {informe.tipo === "Seguimiento" && informe.periodo
+                          ? `Seguimiento — ${informe.periodo}`
+                          : informe.tipo === "Extraordinario" && informe.tipoExtraordinario
+                          ? `Extraordinario — ${etiquetasExtraordinario[informe.tipoExtraordinario] ?? informe.tipoExtraordinario}`
+                          : informe.tipo === "Inicial"
+                          ? "Informe inicial"
+                          : "Informe final"}
                       </p>
                       <p className="text-gray-400 text-xs mt-0.5">
-                        {/* Fecha en formato español y nombre del profesional que lo redactó */}
-                        {new Date(informe.fecha).toLocaleDateString("es-ES")} ·{" "}
-                        {informe.usuario.nombre}
+                        {new Date(informe.fecha).toLocaleDateString("es-ES")} · {informe.usuario.nombre}
                       </p>
                     </div>
-                    <span className="text-xs text-gray-500 bg-gray-700 px-2 py-1 rounded">
-                      Inicial
+                    <span className={`text-xs font-medium px-2 py-1 rounded ${estiloTipoInforme[informe.tipo]}`}>
+                      {informe.tipo}
                     </span>
                   </div>
                 ))}
