@@ -24,7 +24,6 @@ datasource db {
 
 // Roles de los profesionales del equipo
 enum Rol {
-  MONITOR
   ATE
   EDUCADOR
   TRABAJADOR_SOCIAL
@@ -56,16 +55,20 @@ enum TipoExtraordinario {
 model Usuario {
   // @id — clave primaria de la tabla
   // @default(cuid()) — genera un ID único automáticamente
-  id         String   @id @default(cuid())
-  nombre     String
+  id       String   @id @default(cuid())
+  nombre   String
   // @unique — no pueden existir dos usuarios con el mismo email
-  email      String   @unique
-  password   String
-  rol        Rol      @default(EDUCADOR)
+  email    String   @unique
+  password String
+  rol      Rol      @default(EDUCADOR)
   // Si está activo o dado de baja sin eliminar el registro
-  activo     Boolean  @default(true)
+  activo   Boolean  @default(true)
   // @default(now()) — guarda la fecha y hora actual automáticamente
-  creadoEn   DateTime @default(now())
+  creadoEn DateTime @default(now())
+
+  // Menores asignados como tutor educativo
+  // Un educador puede ser tutor de varios menores
+  menoresComoTutor Menor[] @relation("TutorMenores")
 
   // Relaciones — un usuario puede crear muchos informes de cada tipo
   // Estos campos no son columnas en la BD, son accesos virtuales de Prisma
@@ -74,67 +77,75 @@ model Usuario {
   informesExtraordinario InformeExtraordinario[]
   informesFinales        InformeFinal[]
   incidencias            Incidencia[]
+  menors                 Menor[]
 }
 
 // ─── MODELO MENOR ────────────────────────────────────────────────
 // Ficha completa de cada menor en el sistema
 
 model Menor {
-  id                  String       @id @default(cuid())
+  id String @id @default(cuid())
 
   // Datos personales básicos
   // El ? indica que el campo es opcional — puede estar vacío
-  nombre              String
-  apellidos           String
-  fechaNacimiento     DateTime
-  dni                 String?      @unique
-  nacionalidad        String?
-  domicilio           String?
-  telefono            String?
+  nombre          String
+  apellidos       String
+  fechaNacimiento DateTime
+  dni             String?  @unique
+  nacionalidad    String?
+  domicilio       String?
+  telefono        String?
 
   // Información sobre la medida judicial
-  expediente          String       @unique
-  tipoMedida          String
-  estadoMedida        EstadoMedida @default(ACTIVA)
-  fechaInicio         DateTime
-  fechaFin            DateTime?
-  juzgado             String?
+  expediente   String       @unique
+  tipoMedida   String
+  estadoMedida EstadoMedida @default(ACTIVA)
+  fechaInicio  DateTime
+  fechaFin     DateTime?
+  juzgado      String?
 
   // Información familiar
-  tutorNombre         String?
-  tutorTelefono       String?
-  tutorRelacion       String?
-  situacionFamiliar   String?
+  tutorNombre       String?
+  tutorTelefono     String?
+  tutorRelacion     String?
+  situacionFamiliar String?
 
   // Situación educativa
-  centroEducativo     String?
-  cursoNivel          String?
-  situacionEscolar    String?
+  centroEducativo  String?
+  cursoNivel       String?
+  situacionEscolar String?
 
   // Situación de salud física
-  medicoAsignado      String?
-  centroSalud         String?
-  observacionesSalud  String?
+  medicoAsignado     String?
+  centroSalud        String?
+  observacionesSalud String?
 
   // Situación de salud mental
-  psicologoAsignado   String?
-  diagnostico         String?
-  medicacion          String?
+  psicologoAsignado String?
+  diagnostico       String?
+  medicacion        String?
 
   // Situación con servicios sociales
-  trabajadorSocial    String?
-  serviciosSociales   String?
+  trabajadorSocial  String?
+  serviciosSociales String?
 
   // Perfil psicológico general
-  perfilPsicologico   String?
+  perfilPsicologico String?
 
   // Objetivos del plan de intervención educativa
   objetivos_generales   String?
   objetivos_especificos String?
 
-  creadoEn            DateTime @default(now())
+  // Tutor educativo asignado al menor
+  // Relación opcional — puede no tener tutor asignado todavía
+  // El tutor es el educador responsable principal del menor,
+  // con acceso completo a su ficha aunque tenga rol EDUCADOR
+  tutorEducativoId String?
+  tutorEducativo   Usuario? @relation("TutorMenores", fields: [tutorEducativoId], references: [id])
+
+  creadoEn      DateTime @default(now())
   // @updatedAt — se actualiza automáticamente cada vez que se modifica el registro
-  actualizadoEn       DateTime @updatedAt
+  actualizadoEn DateTime @updatedAt
 
   // Relaciones — un menor puede tener muchos informes e incidencias
   informesIniciales      InformeInicial[]
@@ -142,129 +153,131 @@ model Menor {
   informesExtraordinario InformeExtraordinario[]
   informesFinales        InformeFinal[]
   incidencias            Incidencia[]
+  usuario                Usuario?                @relation(fields: [usuarioId], references: [id])
+  usuarioId              String?
 }
 
 // ─── INFORME INICIAL ─────────────────────────────────────────────
 // Se crea cuando el menor ingresa en el centro
 
 model InformeInicial {
-  id                          String   @id @default(cuid())
-  fecha                       DateTime @default(now())
+  id    String   @id @default(cuid())
+  fecha DateTime @default(now())
 
   // Situación al ingreso
   motivoIngreso               String
-  situacionFamiliarIngreso     String?
-  situacionEducativaIngreso    String?
-  situacionSaludIngreso        String?
-  situacionSaludMentalIngreso  String?
-  redSocialApoyo               String?
+  situacionFamiliarIngreso    String?
+  situacionEducativaIngreso   String?
+  situacionSaludIngreso       String?
+  situacionSaludMentalIngreso String?
+  redSocialApoyo              String?
 
   // Adicciones y consumo de tóxicos al ingreso
-  consumoSustancias            Boolean  @default(false)
-  sustanciasConsumidas         String?  // alcohol, cannabis, cocaína...
-  frecuenciaConsumo            String?
-  edadInicioConsumo            String?
-  tratamientoPrevio            Boolean  @default(false)
-  observacionesConsumo         String?
+  consumoSustancias    Boolean @default(false)
+  sustanciasConsumidas String? // alcohol, cannabis, cocaína...
+  frecuenciaConsumo    String?
+  edadInicioConsumo    String?
+  tratamientoPrevio    Boolean @default(false)
+  observacionesConsumo String?
 
   // Valoración inicial del equipo
-  valoracionEducativa          String?
-  riesgosDetectados            String?
-  necesidadesDetectadas        String?
-  objetivosInicio              String?
-  recursosPlanificados         String?
+  valoracionEducativa   String?
+  riesgosDetectados     String?
+  necesidadesDetectadas String?
+  objetivosInicio       String?
+  recursosPlanificados  String?
 
   // Relación con el menor — @relation conecta esta tabla con la tabla Menor
   // fields: campo de esta tabla | references: campo de la tabla Menor
-  menorId                      String
-  menor                        Menor    @relation(fields: [menorId], references: [id])
+  menorId String
+  menor   Menor  @relation(fields: [menorId], references: [id])
 
   // Relación con el usuario que redactó el informe
-  usuarioId                    String
-  usuario                      Usuario  @relation(fields: [usuarioId], references: [id])
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
 
-  creadoEn                     DateTime @default(now())
+  creadoEn DateTime @default(now())
 }
 
 // ─── INFORME DE SEGUIMIENTO ───────────────────────────────────────
 // Se realiza cada 3 meses durante el cumplimiento de la medida
 
 model InformeSeguimiento {
-  id                          String   @id @default(cuid())
-  fecha                       DateTime @default(now())
-  periodo                     String   // ej: "1er trimestre 2025"
+  id      String   @id @default(cuid())
+  fecha   DateTime @default(now())
+  periodo String // ej: "1er trimestre 2025"
 
   // Evolución por áreas de intervención
-  evolucionEducativa          String?
-  evolucionFamiliar           String?
-  evolucionSalud              String?
-  evolucionSaludMental        String?
-  evolucionServiciosSociales  String?
-  evolucionConducta           String?
+  evolucionEducativa         String?
+  evolucionFamiliar          String?
+  evolucionSalud             String?
+  evolucionSaludMental       String?
+  evolucionServiciosSociales String?
+  evolucionConducta          String?
 
   // Evolución en consumo de tóxicos
-  evolucionConsumo            String?  // mejora / estable / empeora
-  sustanciasActuales          String?
-  enTratamientoAdicciones     Boolean  @default(false)
-  recursoAdicciones           String?  // nombre del centro o programa
-  observacionesConsumo        String?
+  evolucionConsumo        String? // mejora / estable / empeora
+  sustanciasActuales      String?
+  enTratamientoAdicciones Boolean @default(false)
+  recursoAdicciones       String? // nombre del centro o programa
+  observacionesConsumo    String?
 
   // Revisión de objetivos del trimestre
-  objetivosConseguidos        String?
-  objetivosPendientes         String?
-  objetivosNuevos             String?
+  objetivosConseguidos String?
+  objetivosPendientes  String?
+  objetivosNuevos      String?
 
   // Valoración global y propuesta de continuación
-  valoracionGeneral           String?
-  propuestaContinuacion       String?
+  valoracionGeneral     String?
+  propuestaContinuacion String?
 
-  menorId                     String
-  menor                       Menor    @relation(fields: [menorId], references: [id])
-  usuarioId                   String
-  usuario                     Usuario  @relation(fields: [usuarioId], references: [id])
+  menorId   String
+  menor     Menor   @relation(fields: [menorId], references: [id])
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
 
-  creadoEn                    DateTime @default(now())
+  creadoEn DateTime @default(now())
 }
 
 // ─── INFORME EXTRAORDINARIO ──────────────────────────────────────
 // Se genera cuando ocurre algo relevante que puede afectar a la medida
 
 model InformeExtraordinario {
-  id                    String             @id @default(cuid())
-  fecha                 DateTime           @default(now())
+  id    String             @id @default(cuid())
+  fecha DateTime           @default(now())
   // Tipo de situación extraordinaria usando el enum definido arriba
-  tipo                  TipoExtraordinario
+  tipo  TipoExtraordinario
 
-  descripcionHecho      String
-  impactoEnMedida       String?
-  medidasAdoptadas      String?
+  descripcionHecho     String
+  impactoEnMedida      String?
+  medidasAdoptadas     String?
   // A quién se ha comunicado: juzgado, familia, servicios sociales...
-  comunicadoA           String?
+  comunicadoA          String?
   // Si requiere modificación formal de la medida judicial
-  requiereModificacion  Boolean            @default(false)
+  requiereModificacion Boolean @default(false)
 
-  menorId               String
-  menor                 Menor              @relation(fields: [menorId], references: [id])
-  usuarioId             String
-  usuario               Usuario            @relation(fields: [usuarioId], references: [id])
+  menorId   String
+  menor     Menor   @relation(fields: [menorId], references: [id])
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
 
-  creadoEn              DateTime           @default(now())
+  creadoEn DateTime @default(now())
 }
 
 // ─── INFORME FINAL ───────────────────────────────────────────────
 // Se redacta cuando el menor finaliza la medida y abandona el centro
 
 model InformeFinal {
-  id                       String   @id @default(cuid())
-  fecha                    DateTime @default(now())
+  id    String   @id @default(cuid())
+  fecha DateTime @default(now())
 
   // Resumen del proceso completo
-  resumenIntervencion      String?
-  duracionMedida           String?
+  resumenIntervencion String?
+  duracionMedida      String?
 
   // Balance de objetivos al cierre
-  objetivosAlcanzados      String?
-  objetivosNoCumplidos     String?
+  objetivosAlcanzados  String?
+  objetivosNoCumplidos String?
 
   // Situación en todas las áreas al momento del cierre
   situacionFamiliarCierre  String?
@@ -273,22 +286,22 @@ model InformeFinal {
   redApoyoCierre           String?
 
   // Situación de consumo al cierre
-  situacionConsumoCierre    String?  // abstinente / reducción / sin cambios
-  enTratamientoAlCierre     Boolean  @default(false)
-  recursoAdiccionesCierre   String?
+  situacionConsumoCierre     String? // abstinente / reducción / sin cambios
+  enTratamientoAlCierre      Boolean @default(false)
+  recursoAdiccionesCierre    String?
   observacionesConsumoCierre String?
 
   // Pronóstico y recursos a los que se deriva al salir
-  pronostico               String?
-  recomendaciones          String?
-  derivaciones             String?
+  pronostico      String?
+  recomendaciones String?
+  derivaciones    String?
 
-  menorId                  String
-  menor                    Menor    @relation(fields: [menorId], references: [id])
-  usuarioId                String
-  usuario                  Usuario  @relation(fields: [usuarioId], references: [id])
+  menorId   String
+  menor     Menor   @relation(fields: [menorId], references: [id])
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
 
-  creadoEn                 DateTime @default(now())
+  creadoEn DateTime @default(now())
 }
 
 // ─── INCIDENCIAS ─────────────────────────────────────────────────
@@ -298,12 +311,12 @@ model Incidencia {
   id          String   @id @default(cuid())
   fecha       DateTime @default(now())
   descripcion String
-  gravedad    String   // leve / moderada / grave
+  gravedad    String // leve / moderada / grave
   // Si la incidencia ha sido resuelta o sigue abierta
   resuelta    Boolean  @default(false)
 
-  menorId     String
-  menor       Menor    @relation(fields: [menorId], references: [id])
-  usuarioId   String
-  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+  menorId   String
+  menor     Menor   @relation(fields: [menorId], references: [id])
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
 }

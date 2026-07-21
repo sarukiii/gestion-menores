@@ -24,6 +24,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
+  // Añadir al GET y PUT después de obtener la sesión:
+  const menor = await prisma.menor.findUnique({ where: { id } });
+
+  const tieneAcceso = puedeVerFichaCompleta({
+    rolUsuario: session.user.rol,
+    usuarioId: session.user.id,
+    tutorEducativoId: menor?.tutorEducativoId ?? null,
+  });
+
+  if (!tieneAcceso) {
+    return NextResponse.json(
+      { error: "Sin acceso a este menor" },
+      { status: 403 },
+    );
+  }
+
   // Leemos el parámetro menorId de la URL
   // Ejemplo: /api/informes/seguimiento?menorId=abc123
   const menorId = request.nextUrl.searchParams.get("menorId");
