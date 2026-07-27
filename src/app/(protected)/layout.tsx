@@ -1,43 +1,45 @@
 // layout.tsx — Layout protegido para todas las páginas interiores
 //
-// Una Route Group en Next.js es una carpeta con paréntesis — (protected) —
-// que agrupa rutas sin añadir ese nombre a la URL. Es decir, las páginas
-// dentro de (protected) siguen siendo accesibles en /dashboard, /menores, etc.
-// pero comparten este layout automáticamente.
+// Envuelve todas las páginas protegidas con:
+// 1. SessionProvider — necesario para que useSession() funcione en Client Components
+// 2. Sidebar — navegación lateral que aparece en todas las páginas interiores
 //
-// Este layout añade el Sidebar a todas las páginas interiores de la app
-// sin tener que importarlo manualmente en cada una.
-//
-// Es un Server Component porque obtiene la sesión en el servidor
-// para pasársela al Sidebar como props.
+// SessionProvider es el contexto de NextAuth que permite a cualquier
+// componente cliente acceder a la sesión con useSession() sin tener
+// que pasarla como prop manualmente por toda la jerarquía de componentes.
 
-import { auth } from "@/lib/auth"; // función que obtiene la sesión del usuario desde el servidor
-import { redirect } from "next/navigation"; // función de Next.js para redirigir al usuario a otra página
-import Sidebar from "@/components/layout/Sidebar"; // componente del sidebar que se renderiza en todas las páginas interiores
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { SessionProvider } from "next-auth/react";
+import Sidebar from "@/components/layout/Sidebar";
 
-export default async function ProtectedLayout({ //exporta un componente de layout protegido que recibe como props los children (contenido de la página actual)
+export default async function ProtectedLayout({
   children,
 }: {
-  children: React.ReactNode; // los children son el contenido de la página actual que se está renderizando dentro del layout
+  children: React.ReactNode;
 }) {
-  // Doble verificación de sesión — el middleware ya protege las rutas,
-  // pero añadimos esta comprobación como capa extra de seguridad
+  // Verificación de sesión en el servidor — capa extra de seguridad
+  // además del middleware que ya protege las rutas
   const session = await auth();
   if (!session?.user) {
     redirect("/");
   }
 
   return (
-    // Layout de dos columnas: sidebar fijo a la izquierda + contenido a la derecha
-    <div className="flex min-h-screen bg-gray-950">
-      <Sidebar
-        nombreUsuario={session.user.name ?? "Usuario"}
-        rolUsuario={session.user.rol ?? ""}
-      />
-      {/* El children es la página actual que se está renderizando */}
-      <div className="flex-1 overflow-auto">
-        {children}
+    // SessionProvider hace la sesión disponible para todos los Client Components
+    // que usen useSession() dentro de este layout.
+    // Le pasamos la sesión del servidor para evitar un flash de "sin sesión"
+    // al cargar la página — el cliente ya tiene los datos desde el primer render.
+    <SessionProvider session={session}>
+      <div className="flex min-h-screen bg-gray-950">
+        <Sidebar
+          nombreUsuario={session.user.name ?? "Usuario"}
+          rolUsuario={session.user.rol ?? ""}
+        />
+        <div className="flex-1 overflow-auto">
+          {children}
+        </div>
       </div>
-    </div>
+    </SessionProvider>
   );
 }
