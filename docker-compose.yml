@@ -1,0 +1,48 @@
+# docker-compose.yml — Orquestación de la app + base de datos
+#
+# Docker Compose permite levantar varios contenedores juntos con un
+# solo comando: "docker-compose up"
+#
+# En este caso levantamos:
+# 1. La aplicación Next.js
+# 2. PostgreSQL
+#
+# Para el despliegue en el servidor on-premise de la entidad,
+# solo hay que instalar Docker, copiar estos archivos y ejecutar
+# "docker-compose up -d" para arrancar todo en segundo plano.
+
+services:
+  # ── BASE DE DATOS ──────────────────────────────────────────────
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: gestion_menores
+    volumes:
+      # Volumen persistente — los datos no se pierden al reiniciar el contenedor
+      - postgres_data:/var/lib/postgresql/data
+    # El puerto no se expone al exterior por seguridad
+    # Solo la app puede acceder a la BD a través de la red interna de Docker
+
+  # ── APLICACIÓN ─────────────────────────────────────────────────
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      # Puerto 3000 del contenedor → Puerto 3000 del servidor
+      - "3000:3000"
+    environment:
+      # La URL apunta al servicio "db" definido arriba
+      # Docker resuelve el nombre "db" como la IP del contenedor de PostgreSQL
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/gestion_menores?schema=public
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+    depends_on:
+      # La app espera a que la BD esté lista antes de arrancar
+      - db
+
+# Volumen nombrado — Docker gestiona dónde se guardan los datos en el disco
+volumes:
+  postgres_data:
