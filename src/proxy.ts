@@ -1,4 +1,4 @@
-// middleware.ts — Guardián de rutas protegidas
+// proxy.ts — Guardián de rutas protegidas
 //
 // Se ejecuta en Edge Runtime, ANTES de que Next.js procese cualquier
 // petición. Es el primer filtro de seguridad de toda la aplicación.
