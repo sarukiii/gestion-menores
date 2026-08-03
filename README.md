@@ -8,17 +8,17 @@
 
 1. [Descripción del proyecto](#descripción-del-proyecto)
 2. [Contexto y motivación](#contexto-y-motivación)
-3. [Stack tecnológico](#stack-tecnológico)
-4. [Arquitectura](#arquitectura)
-5. [Control de acceso por roles](#control-de-acceso-por-roles)
+3. [Capturas](#capturas)
+4. [Stack tecnológico](#stack-tecnológico)
+5. [Arquitectura](#arquitectura)
 6. [Base de datos](#base-de-datos)
-7. [Autenticación](#autenticación)
-8. [Funcionalidades implementadas](#funcionalidades-implementadas)
-9. [Estructura del proyecto](#estructura-del-proyecto)
-10. [Instalación y configuración](#instalación-y-configuración)
-11. [Despliegue con Docker](#despliegue-con-docker)
-12. [Estado del desarrollo](#estado-del-desarrollo)
-13. [Consideraciones legales](#consideraciones-legales)
+7. [Autenticación y control de acceso](#autenticación-y-control-de-acceso)
+8. [Estructura del proyecto](#estructura-del-proyecto)
+9. [Instalación y configuración](#instalación-y-configuración)
+10. [Estado del desarrollo](#estado-del-desarrollo)
+11. [Roadmap](#roadmap)
+12. [Consideraciones legales](#consideraciones-legales)
+13. [Autor](#autor)
 
 ---
 
@@ -42,20 +42,36 @@ Es además el proyecto principal de portfolio en la transición profesional del 
 
 ---
 
+## Capturas
+
+| Dashboard                                           | Listado de menores                                                |
+|---                                                  |---                                                                |
+| ![Dashboard](docs/screenshots/dashboard.png)        |       ![Listado de menores](docs/screenshots/listado-menores.png) |
+
+| Ficha de menor                                      | Ficha de menor (detalle)                                           |
+|---                                                  | ---                                                                |
+| ![Ficha de menor](docs/screenshots/ficha-menor.png) | ![Ficha de menor detalle](docs/screenshots/ficha-menor2.png)       |
+
+| Informe de seguimiento                                              | Incidencias                                        |
+|---                                                                  | ---                                                |
+| ![Informe de seguimiento](docs/screenshots/informe-seguimiento.png) | ![Incidencias](docs/screenshots/incidencia.png)    |
+
+---
+
 ## Stack tecnológico
 
-| Capa | Tecnología | Por qué |
-|------|------------|---------|
-| Framework | Next.js 16 (App Router) | Full-stack en un solo proyecto, SSR, rutas API integradas |
-| Lenguaje | TypeScript | Tipado estático, mayor seguridad en datos sensibles |
-| Estilos | Tailwind CSS | Desarrollo rápido, diseño consistente |
-| ORM | Prisma 7 | Tipado end-to-end con la base de datos, migraciones automáticas |
-| Base de datos | PostgreSQL 18 | Relacional, robusto, ideal para datos estructurados complejos |
-| Autenticación | NextAuth.js (Auth.js) | Sesiones, JWT, control de acceso por rol |
-| Adaptador BD | @prisma/adapter-pg | Conexión nativa con PostgreSQL en Prisma 7 |
-| Contenerización | Docker + docker-compose | Despliegue reproducible en servidor on-premise |
-| Editor | VS Code | Estándar de la industria |
-| Control de versiones | Git + GitHub | Historial, colaboración, portfolio |
+| Capa                 | Tecnología                        | Por qué                                                         |
+| -------------------- | --------------------------------- | --------------------------------------------------------------- |
+| Framework            | Next.js 14+ (App Router)          | Full-stack en un solo proyecto, SSR, rutas API integradas       |
+| Lenguaje             | TypeScript                        | Tipado estático, mayor seguridad en datos sensibles             |
+| Estilos              | Tailwind CSS                      | Desarrollo rápido, diseño consistente                           |
+| ORM                  | Prisma 7                          | Tipado end-to-end con la base de datos, migraciones automáticas |
+| Base de datos        | PostgreSQL                        | Relacional, robusto, ideal para datos estructurados complejos   |
+| Autenticación        | NextAuth.js (Auth.js)             | Sesiones, JWT, control de acceso por rol                        |
+| Adaptador BD         | @prisma/adapter-pg                | Conexión nativa con PostgreSQL en Prisma 7                      |
+| Contenedores         | Docker + docker-compose           | Entorno reproducible, despliegue on-premise                     |
+| Despliegue           | Servidor on-premise de la entidad | Requisito legal — datos sensibles de menores                    |
+| Control de versiones | Git + GitHub                      | Historial, colaboración, portfolio                              |
 
 ---
 
@@ -63,53 +79,48 @@ Es además el proyecto principal de portfolio en la transición profesional del 
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    CAPA CLIENTE                      │
-│  PC del centro (IP autorizada)  │  Móvil/PC externo  │
-│                                 │  (con permiso)      │
-└─────────────────┬───────────────┴────────────────────┘
+│                    CAPA CLIENTE                     │
+│  PC del centro (IP autorizada)  │  Móvil/PC externo │
+│                                 │  (con permiso)    │
+└─────────────────┬───────────────┴───────────────────┘
                   │
 ┌─────────────────▼───────────────────────────────────┐
-│              CAPA SERVIDOR — Next.js + TypeScript    │
-│                                                      │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐ │
-│  │  Auth.js    │  │  API Routes │  │  proxy.ts   │ │
-│  │  Sesiones   │  │  REST/CRUD  │  │  Protección │ │
-│  │  JWT, Roles │  │  Informes   │  │  de rutas   │ │
-│  └─────────────┘  └─────────────┘  └─────────────┘ │
-│                                                      │
+│              CAPA SERVIDOR — Next.js + TypeScript   │
+│                                                     │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  │
+│  │  Auth.js    │  │  API Routes │  │  Middleware │  │
+│  │  Sesiones   │  │  REST/CRUD  │  │  Whitelist  │  │
+│  │  JWT, Roles │  │  Informes   │  │  IP         │  │
+│  └─────────────┘  └─────────────┘  └─────────────┘  │
+│                                                     │
 │  ┌──────────────────────┐  ┌────────────────────┐   │
 │  │  Frontend React      │  │  Prisma ORM        │   │
 │  │  Tailwind CSS        │  │  Modelos, queries  │   │
 │  │  Fichas, búsqueda    │  │  Migraciones       │   │
 │  └──────────────────────┘  └────────────────────┘   │
-│                                                      │
-│  [ Contenedor Docker — Servidor on-premise ]         │
+│                                                     │
+│  [ Contenedor Docker — Servidor on-premise ]        │
 └─────────────────────────────────────────────────────┘
                   │
 ┌─────────────────▼───────────────────────────────────┐
-│              CAPA DATOS — PostgreSQL                 │
-│  Menores │ Usuarios │ Informes │ Incidencias         │
+│              CAPA DATOS — PostgreSQL                │
+│  Menores │ Usuarios │ Informes │ Incidencias        │
 └─────────────────────────────────────────────────────┘
 ```
 
----
+### Control de acceso por roles
 
-## Control de acceso por roles
+| Rol                | Acceso                                     |
+| ------------------ | ------------------------------------------ |
+| MONITOR            | Lectura básica, registro de incidencias    |
+| ATE                | Lectura básica                             |
+| EDUCADOR           | Fichas, seguimientos, informes educativos  |
+| TRABAJADOR\_SOCIAL | Área social y familiar                     |
+| PSICOLOGO          | Área psicológica y salud mental            |
+| COORDINACION       | Acceso completo, validación de informes    |
+| DIRECCION          | Acceso completo + administración           |
 
-El sistema implementa control de acceso granular definido en `src/lib/permisos.ts`. La lógica está centralizada en un único archivo para que cualquier cambio en las reglas solo requiera modificar un sitio.
-
-| Rol | Acceso |
-|-----|--------|
-| DIRECCION | Acceso completo a todos los menores y funcionalidades |
-| COORDINACION | Acceso completo + asignación de tutores educativos |
-| PSICOLOGO | Acceso completo a todos los menores |
-| TRABAJADOR_SOCIAL | Acceso completo a todos los menores |
-| EDUCADOR | Acceso completo solo a los menores que tiene asignados como tutor |
-| ATE | Acceso básico: ficha general e incidencias |
-
-### Decisión técnica: tutor educativo como clave de acceso
-
-El modelo `Menor` tiene un campo `tutorEducativoId` que apunta al educador responsable. Este campo determina si un educador puede ver la ficha completa de un menor. Solo COORDINACION y DIRECCION pueden asignar tutores, a través de un endpoint separado (`PUT /api/menores/[id]/tutor`) por razones de seguridad y claridad de código.
+La lógica de permisos vive centralizada en `src/lib/permisos.ts`, que expone funciones como `puedeCrearInformes(rol)` para validar acceso tanto en el frontend (mostrar/ocultar UI) como en cada ruta API, evitando duplicar reglas de negocio.
 
 ---
 
@@ -118,112 +129,86 @@ El modelo `Menor` tiene un campo `tutorEducativoId` que apunta al educador respo
 ### Modelos principales
 
 #### `Menor`
-Ficha completa de cada menor con más de 30 campos organizados en áreas:
-- Datos personales (nombre, DNI, fecha de nacimiento, contacto)
-- Medida judicial (expediente, tipo, estado, fechas, juzgado)
-- Situación familiar (tutor legal, relación, situación familiar)
-- Situación educativa (centro, curso, situación escolar)
-- Salud física (médico, centro de salud)
-- Salud mental (psicólogo, diagnóstico, medicación)
-- Servicios sociales (trabajador social asignado)
-- Perfil psicológico y objetivos de intervención
-- Tutor educativo asignado (determina permisos de acceso)
+
+Ficha completa de cada menor. Incluye datos personales, medida judicial, situación familiar, educativa, salud física y mental, servicios sociales, perfil psicológico y objetivos del plan de intervención.
 
 #### `Usuario`
-Profesionales del equipo con rol asignado. Incluye campo `activo` para deshabilitar sin borrar, preservando la trazabilidad histórica de informes e incidencias.
+
+Profesionales del equipo con rol asignado. Los roles determinan qué información pueden ver y editar.
 
 #### `InformeInicial`
-Se genera al ingreso del menor. Recoge situación en todas las áreas, incluyendo consumo de tóxicos, riesgos y plan de intervención inicial.
+
+Se genera al ingreso del menor. Recoge la situación en todas las áreas al inicio, incluyendo consumo de tóxicos, riesgos detectados y plan de intervención inicial.
 
 #### `InformeSeguimiento`
-Informe trimestral. Evolución por áreas, revisión de objetivos y propuesta de continuación.
+
+Informe trimestral. Recoge la evolución en todas las áreas de intervención y la revisión de objetivos.
 
 #### `InformeExtraordinario`
-Ante situaciones que pueden afectar a la medida: salud mental, cambio familiar, embarazo, nuevo delito, adicción. Incluye campo `requiereModificacion` para indicar si el hecho implica cambio de medida judicial.
+
+Se genera ante situaciones relevantes que pueden afectar a la medida judicial (salud mental, cambio familiar, embarazo, nuevo delito, adicción, otros).
 
 #### `InformeFinal`
-Cierre del expediente. Balance de objetivos, situación al cierre en todas las áreas y derivaciones a recursos externos.
+
+Informe de cierre al finalizar la medida. Recoge el balance de la intervención y las derivaciones a recursos externos.
 
 #### `Incidencia`
-Notificaciones al juzgado de hechos puntuales. Clasificadas por gravedad (leve, moderada, grave). Accesibles para todos los roles — es la única funcionalidad disponible para ATE además de ver la ficha básica.
+
+Registro de incidentes durante la estancia, clasificados por gravedad (leve, moderada, grave) con estado de resolución.
 
 ### Diagrama de relaciones
 
 ```
-Usuario ──────────────────────────────────────────────┐
-   │                                                  │
-   │ (autor de informes e incidencias)                │
-   ▼                                                  │
-InformeInicial ──────┐                                │
-InformeSeguimiento ──┤                                │
-InformeExtraordinario┤── menorId ──► Menor ◄──────────┘
-InformeFinal ────────┘                    ▲
-Incidencia ──────────┘                   │
-                                          │ tutorEducativoId
-                                       Usuario (EDUCADOR)
+Usuario ──────────────────────────────────────────┐
+   │                                              │
+   │ (autor)                                      │
+   ▼                                              │
+InformeInicial ──────┐                            │
+InformeSeguimiento ──┤── menorId ──► Menor ◄──────┘
+InformeExtraordinario┤
+InformeFinal ────────┘
+Incidencia ──────────┘
 ```
 
 ---
 
-## Autenticación
+## Autenticación y control de acceso
 
-Sistema construido con **NextAuth.js (Auth.js)** usando proveedor `Credentials` (email + contraseña propios).
+El sistema de login está construido con **NextAuth.js (Auth.js)** usando el proveedor `Credentials` (email + contraseña propios, sin login social).
 
-### Flujo completo
+### Flujo de autenticación
 
-1. Usuario introduce credenciales en `/` (pantalla de login)
-2. `authorize` en `auth.ts` busca el usuario en PostgreSQL vía Prisma
-3. Contraseña comparada con hash bcrypt — nunca almacenada en texto plano
-4. Si correcta, se genera **token JWT** con id, nombre y rol del usuario
-5. `proxy.ts` protege todas las rutas: sin sesión válida → redirige al login
+1. El usuario introduce email y contraseña en `/` (pantalla de login)
+2. La función `authorize` en `src/lib/auth.ts` busca el usuario en PostgreSQL vía Prisma
+3. La contraseña se compara con el hash guardado usando **bcrypt** — nunca se almacena en texto plano
+4. Si es correcta, se genera un **token JWT** con el id y el rol del usuario
+5. El **middleware** (`src/middleware.ts`) protege todas las rutas excepto el login: si no hay sesión válida, redirige a `/`
 
-### Decisión técnica: configuración dividida para Edge Runtime
+### Decisión técnica: configuración dividida (Edge Runtime)
 
-El middleware de Next.js se ejecuta en **Edge Runtime**, que no soporta módulos nativos de Node (`node:path`, `node:fs`) usados internamente por el cliente generado por Prisma 7. Importar `auth.ts` directamente desde el middleware rompía la aplicación.
+Durante el desarrollo surgió un problema real al integrar Prisma 7 con el middleware de Next.js: el middleware se ejecuta en **Edge Runtime**, un entorno que no soporta módulos nativos de Node (`node:path`, `node:fs`) que usa internamente el cliente generado por Prisma. Importar `auth.ts` directamente desde el middleware rompía la aplicación con errores de módulo nativo no encontrado.
 
-**Solución aplicada:**
-- `src/lib/auth.config.ts` — configuración ligera sin Prisma, importada desde el middleware
-- `src/lib/auth.ts` — configuración completa con Prisma y bcrypt, usada en rutas API y Server Components
+**Solución aplicada** — se dividió la configuración de NextAuth en dos archivos:
+
+- `src/lib/auth.config.ts` — configuración ligera, sin Prisma. Solo páginas y reglas de autorización. Es lo único que se importa desde el middleware.
+- `src/lib/auth.ts` — configuración completa, con Prisma y bcrypt. Se usa en la ruta API y en Server Components, donde sí existe un entorno Node completo.
 
 Este patrón está recomendado en la documentación oficial de NextAuth para proyectos con middleware + ORM.
 
+### Corrección de seguridad: permisos en rutas API
+
+Durante una revisión del código se detectó que las cuatro rutas API de informes (`inicial`, `seguimiento`, `extraordinario`, `final`) verificaban que existiera una sesión activa, pero no comprobaban si el rol del usuario tenía permiso para crear informes (`puedeCrearInformes`). Esto permitía que roles con permisos más bajos crearan informes directamente vía API, aunque la UI no mostrara esa opción.
+
+**Solución aplicada** — se añadió la verificación de `puedeCrearInformes(rol)` en cada una de las cuatro rutas, antes de procesar la petición, alineando la validación del backend con las reglas de negocio ya definidas en `permisos.ts`. Este tipo de comprobación es imprescindible: la UI puede ocultar botones, pero solo la API protege realmente los datos.
+
 ### Seguridad implementada
 
-- Contraseñas cifradas con `bcryptjs` (hash irreversible)
-- `NEXTAUTH_SECRET` generado con `crypto.randomBytes(32)` — aleatoriedad criptográfica real
-- Campo `activo` en Usuario — deshabilitar sin borrar preserva trazabilidad
-- Rutas protegidas a nivel de middleware antes de renderizar
-- Separación Edge/Node evita exponer lógica de BD en entorno menos seguro
-- Autoría en API tomada siempre de la sesión, nunca del body de la petición
-
----
-
-## Funcionalidades implementadas
-
-### CRUD de menores
-- Alta de menor con formulario completo por secciones colapsables
-- Listado con búsqueda en tiempo real por nombre/expediente y filtro por estado
-- Ficha individual con modo lectura / modo edición inline
-- Control de acceso por rol aplicado en API y UI
-
-### Sistema de informes
-Cuatro tipos de informe accesibles desde la ficha del menor, con sección unificada que los lista cronológicamente:
-
-| Tipo | Cuándo | Campos destacados |
-|------|--------|-------------------|
-| Inicial | Al ingreso | Situación en todas las áreas, consumo, riesgos, plan |
-| Seguimiento | Trimestral | Evolución por áreas, revisión de objetivos |
-| Extraordinario | Ante hechos relevantes | Tipo, descripción, impacto, comunicaciones |
-| Final | Al cierre | Balance, situación al cierre, derivaciones |
-
-### Incidencias
-Registro de notificaciones al juzgado accesible para todos los roles. Selección visual de gravedad (leve, moderada, grave).
-
-### Gestión de tutores
-Coordinación y Dirección pueden asignar el educador tutor de cada menor desde la ficha. El tutor asignado determina el acceso del educador a esa ficha.
-
-### Navegación
-Sidebar global con navegación entre secciones, avatar con inicial del usuario, rol visible y logout.
+- Contraseñas cifradas con `bcryptjs` (hash, nunca texto plano)
+- Sesión en JWT firmado con clave generada mediante `crypto.randomBytes(32)`
+- Verificación de usuario activo (`activo: false` deshabilita sin borrar, preservando trazabilidad histórica)
+- Rutas protegidas a nivel de middleware, antes de renderizar cualquier página
+- Verificación de permisos por rol también a nivel de API, no solo de UI
+- Separación de configuración Edge/Node para evitar exponer lógica de base de datos en el entorno menos confiable
 
 ---
 
@@ -232,58 +217,40 @@ Sidebar global con navegación entre secciones, avatar con inicial del usuario, 
 ```
 gestion-menores/
 ├── prisma/
-│   ├── schema.prisma              # Modelos de base de datos
-│   ├── seed.ts                    # Datos de prueba (7 usuarios, 4 menores, informes)
-│   └── migrations/                # Historial de migraciones SQL
+│   ├── schema.prisma          # Modelos de base de datos
+│   ├── migrations/            # Historial de migraciones SQL
+│   └── seed.ts                # Script para generar usuarios de prueba
 ├── src/
 │   ├── app/
-│   │   ├── page.tsx               # Pantalla de login
-│   │   ├── (protected)/           # Route Group — layout con sidebar
-│   │   │   ├── layout.tsx         # Layout protegido con SessionProvider
-│   │   │   ├── dashboard/
-│   │   │   ├── menores/
-│   │   │   │   ├── page.tsx       # Listado con búsqueda y filtros
-│   │   │   │   ├── nuevo/         # Formulario de alta
-│   │   │   │   └── [id]/
-│   │   │   │       ├── page.tsx   # Ficha con control de acceso por rol
-│   │   │   │       ├── incidencias/
-│   │   │   │       └── informes/
-│   │   │   │           ├── inicial/
-│   │   │   │           ├── seguimiento/
-│   │   │   │           ├── extraordinario/
-│   │   │   │           └── final/
-│   │   │   └── seguimientos/
+│   │   ├── layout.tsx
+│   │   ├── page.tsx            # Pantalla de login
+│   │   ├── dashboard/
+│   │   ├── menores/
+│   │   │   ├── page.tsx        # Listado
+│   │   │   ├── [id]/page.tsx   # Ficha individual
+│   │   │   └── nuevo/page.tsx  # Alta
+│   │   ├── informes/            # Formularios de los 4 tipos de informe
+│   │   ├── incidencias/         # Módulo de incidencias
 │   │   └── api/
-│   │       ├── auth/[...nextauth]/
+│   │       ├── auth/[...nextauth]/route.ts
 │   │       ├── menores/
-│   │       │   ├── route.ts       # GET listado, POST crear
-│   │       │   └── [id]/
-│   │       │       ├── route.ts   # GET ficha, PUT editar
-│   │       │       └── tutor/     # PUT asignar tutor
-│   │       ├── informes/
-│   │       │   ├── inicial/
-│   │       │   ├── seguimiento/
-│   │       │   ├── extraordinario/
-│   │       │   └── final/
-│   │       ├── incidencias/
-│   │       └── usuarios/          # GET lista de educadores
+│   │       ├── informes/        # inicial, seguimiento, extraordinario, final
+│   │       └── incidencias/
 │   ├── components/
+│   │   ├── ui/
+│   │   ├── menores/
 │   │   └── layout/
-│   │       └── Sidebar.tsx        # Navegación global
 │   ├── lib/
-│   │   ├── prisma.ts              # Cliente singleton de Prisma con adaptador pg
-│   │   ├── auth.ts                # Configuración completa NextAuth (con Prisma)
-│   │   ├── auth.config.ts         # Configuración Edge-safe (sin Prisma)
-│   │   └── permisos.ts            # Lógica centralizada de control de acceso
+│   │   ├── prisma.ts
+│   │   ├── auth.ts
+│   │   ├── auth.config.ts
+│   │   └── permisos.ts         # Lógica centralizada de control de acceso por rol
 │   ├── types/
-│   │   └── next-auth.d.ts         # Extensión de tipos NextAuth (campo rol)
-│   └── proxy.ts                   # Protección de rutas (Next.js 16)
-├── Dockerfile                     # Imagen multi-stage para producción
-├── docker-compose.yml             # App + PostgreSQL en contenedores
-├── .dockerignore
-├── .env                           # Variables de entorno (no en Git)
-├── prisma.config.ts               # Configuración Prisma 7
-└── next.config.ts                 # output: standalone para Docker
+│   └── middleware.ts
+├── docker-compose.yml
+├── Dockerfile
+├── .env
+└── package.json
 ```
 
 ---
@@ -292,11 +259,19 @@ gestion-menores/
 
 ### Requisitos previos
 
-- Node.js 20+
-- PostgreSQL 18
+- Node.js 18+
+- Docker y docker-compose (recomendado) o PostgreSQL 15+ local
 - Git
 
-### Pasos
+### Opción 1 — Con Docker (recomendado)
+
+```bash
+git clone https://github.com/sarukiii/gestion-menores.git
+cd gestion-menores
+docker-compose up -d
+```
+
+### Opción 2 — Entorno local
 
 ```bash
 # 1. Clonar el repositorio
@@ -306,82 +281,65 @@ cd gestion-menores
 # 2. Instalar dependencias
 npm install
 
-# 3. Configurar variables de entorno — crear archivo .env
+# 3. Configurar variables de entorno (crear .env)
 DATABASE_URL="postgresql://usuario:contraseña@localhost:5432/gestion_menores?schema=public"
-NEXTAUTH_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+NEXTAUTH_SECRET="clave-secreta-larga"
 NEXTAUTH_URL="http://localhost:3000"
 
-# 4. Crear la base de datos en PostgreSQL (desde pgAdmin o psql)
-# CREATE DATABASE gestion_menores;
-
-# 5. Ejecutar migraciones y generar cliente
+# 4. Ejecutar migraciones
 npx prisma migrate dev
+
+# 5. Generar el cliente de Prisma
 npx prisma generate
 
-# 6. Poblar con datos de prueba
+# 6. (Opcional) Poblar la base de datos con usuarios de prueba
 npx prisma db seed
 
 # 7. Arrancar el servidor de desarrollo
 npm run dev
 ```
 
-### Usuarios de prueba (contraseña: Test1234)
-
-| Email | Rol |
-|-------|-----|
-| coordinacion@test.com | Coordinación |
-| direccion@test.com | Dirección |
-| educador1@test.com | Educador/a |
-| educador2@test.com | Educador/a |
-| psicologo@test.com | Psicólogo/a |
-| trabajadorsocial@test.com | Trabajador/a Social |
-| ate@test.com | ATE |
-
----
-
-## Despliegue con Docker
-
-Para desplegar en el servidor on-premise de la entidad:
-
-```bash
-# Crear archivo .env con las variables de producción
-# Arrancar app + base de datos en segundo plano
-docker-compose up -d
-
-# Ejecutar migraciones en el contenedor
-docker-compose exec app npx prisma migrate deploy
-
-# Poblar con datos iniciales
-docker-compose exec app npx prisma db seed
-```
-
-La imagen usa **multi-stage build** para minimizar el tamaño final — solo incluye los archivos necesarios para ejecutar la app en producción, no las devDependencies ni el código fuente.
+Abre <http://localhost:3000>
 
 ---
 
 ## Estado del desarrollo
 
 ### ✅ Completado
-- Setup completo (Next.js 16, TypeScript, Tailwind, Prisma 7, PostgreSQL)
-- Sistema de autenticación end-to-end (NextAuth + JWT + bcrypt)
-- Configuración dividida Edge/Node para compatibilidad con Prisma 7
-- Middleware de protección de rutas (`proxy.ts`)
-- CRUD completo de menores (alta, listado, ficha, edición)
-- Búsqueda en tiempo real y filtrado por estado en el listado
-- 4 tipos de informe con formularios completos (inicial, seguimiento, extraordinario, final)
-- Módulo de incidencias accesible para todos los roles
-- Control de acceso por rol en API y UI (`src/lib/permisos.ts`)
-- Asignación de tutor educativo por Coordinación/Dirección
-- Sidebar de navegación global con SessionProvider
-- Seed con datos de prueba realistas (7 usuarios, 4 menores, informes, incidencias)
-- Dockerización con multi-stage build y docker-compose
-- Documentación completa
+
+- Configuración del proyecto (Next.js, TypeScript, Tailwind)
+- Diseño completo de la base de datos (7 modelos, relaciones, enums)
+- Sistema de autenticación completo y verificado end-to-end (NextAuth + JWT + bcrypt)
+- Middleware de protección de rutas, separado en configuración Edge-safe
+- Sistema de permisos por rol centralizado (`permisos.ts`)
+- CRUD completo de menores (listado, ficha, alta)
+- Los 4 tipos de informes (inicial, seguimiento, extraordinario, final)
+- Módulo de incidencias
+- Seed script para generar usuarios de prueba de forma reproducible
+- Dashboard principal con sesión real, rol visible y logout funcional
+- Verificación de permisos a nivel de API (no solo de UI) en las rutas de informes
+- Docker y docker-compose para entorno reproducible
 
 ### 📋 Pendiente
+
+- Control de acceso por rol en la UI (afinar qué se muestra/oculta según permisos)
+- Búsqueda y filtrado avanzado de menores
 - Exportación de informes a PDF
 - Restricción de acceso por IP (whitelist de dispositivos del centro)
-- Búsqueda global de informes
-- Portfolio web personal
+- Migrar `middleware.ts` a la convención `proxy.ts` (deprecation aviso de Next.js 16)
+
+---
+
+## Roadmap
+
+| Fase | Contenido                                             | Estado        |
+| ---- | ----------------------------------------------------- | ------------  |
+| 1    | Setup, base de datos, login (interfaz)                | ✅ Completada |
+| 2    | Autenticación real, middleware, sesiones, dashboard   | ✅ Completada |
+| 3    | CRUD menores                                          | ✅ Completada |
+| 4    | Informes, seguimientos, incidencias                   | ✅ Completada |
+| 5    | Roles en UI, restricción IP, exportación PDF          | 📋 Pendiente  |
+| 6    | Docker, despliegue en servidor                        | ✅ Completada |
 
 ---
 
@@ -393,21 +351,17 @@ Este proyecto maneja datos especialmente sensibles de menores:
 - **Ley Orgánica 1/1996** — Protección jurídica del menor
 - **Ley Orgánica 5/2000** — Responsabilidad penal de menores
 - Los datos se almacenan en servidor on-premise de la entidad responsable
-- Acceso restringido por rol profesional con lógica centralizada en `permisos.ts`
-- Trazabilidad completa: cada informe e incidencia registra autoría y fecha
-- La autoría en las API siempre se toma de la sesión, nunca del body de la petición
+- Acceso restringido por IP y por rol profesional
+- Trazabilidad completa: cada registro tiene autor y fecha
 - El archivo `.env` con credenciales nunca se sube al repositorio
+- El repositorio público no contiene datos reales de menores ni credenciales; los ejemplos y capturas usan datos ficticios
 
 ---
 
 ## Autor
 
 **Sara** — Educadora social en transición al desarrollo web
-DAM (Desarrollo de Aplicaciones Multiplataforma)
-Stack: TypeScript · Next.js · PostgreSQL · Prisma · React · Docker
+DAM (Desarrollo de Aplicaciones Multiplataforma) · AWS Cloud Practitioner
+Stack: TypeScript · Next.js · PostgreSQL · Prisma · React
 
-[GitHub](https://github.com/sarukiii) · [LinkedIn](#)
-
----
-
-> Este proyecto es privado por contener lógica de negocio para uso institucional real. El repositorio muestra arquitectura, decisiones técnicas y código sin datos reales de menores.
+[GitHub](https://github.com/sarukiii) · [LinkedIn]([(https://www.linkedin.com/in/sara-lopez-reina/)])
