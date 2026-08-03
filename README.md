@@ -48,13 +48,13 @@ Es además el proyecto principal de portfolio en la transición profesional del 
 |---                                                  |---                                                                |
 | ![Dashboard](docs/screenshots/dashboard.png)        |       ![Listado de menores](docs/screenshots/listado-menores.png) |
 
-| Ficha de menor                                      | Ficha de menor (detalle)                                           |
-|---                                                  | ---                                                                |
-| ![Ficha de menor](docs/screenshots/ficha-menor.png) | ![Ficha de menor detalle](docs/screenshots/ficha-menor2.png)       |
+| Ficha de menor                                      | Ficha de menor (detalle)                                          |
+|---                                                  | ---                                                               |
+| ![Ficha de menor](docs/screenshots/ficha-menor.png) | ![Ficha de menor detalle](docs/screenshots/ficha-menor2.png)      |
 
-| Informe de seguimiento                                              | Incidencias                                        |
-|---                                                                  | ---                                                |
-| ![Informe de seguimiento](docs/screenshots/informe-seguimiento.png) | ![Incidencias](docs/screenshots/incidencia.png)    |
+| Informe de seguimiento                                              | Incidencia                                        |
+|---                                                                  | ---                                               |
+| ![Informe de seguimiento](docs/screenshots/informe-seguimiento.png) | ![Incidencia](docs/screenshots/incidencia.png)    |
 
 ---
 
@@ -110,17 +110,16 @@ Es además el proyecto principal de portfolio en la transición profesional del 
 
 ### Control de acceso por roles
 
-| Rol                | Acceso                                     |
-| ------------------ | ------------------------------------------ |
-| MONITOR            | Lectura básica, registro de incidencias    |
-| ATE                | Lectura básica                             |
-| EDUCADOR           | Fichas, seguimientos, informes educativos  |
-| TRABAJADOR\_SOCIAL | Área social y familiar                     |
-| PSICOLOGO          | Área psicológica y salud mental            |
-| COORDINACION       | Acceso completo, validación de informes    |
-| DIRECCION          | Acceso completo + administración           |
+| Rol                | Acceso                                                               |
+| -------------------| -------------------------------------------------------------------- |
+| ATE                | Acceso básico: ver ficha del menor y crear incidencias               |
+| EDUCADOR           | Acceso completo solo a los menores donde es tutor educativo asignado |
+| TRABAJADOR\_SOCIAL | Acceso completo a todos los menores                                  |
+| PSICOLOGO          | Acceso completo a todos los menores                                  |
+| COORDINACION       | Acceso completo + puede asignar tutores educativos                   |
+| DIRECCION          | Acceso completo + puede asignar tutores educativos                   |
 
-La lógica de permisos vive centralizada en `src/lib/permisos.ts`, que expone funciones como `puedeCrearInformes(rol)` para validar acceso tanto en el frontend (mostrar/ocultar UI) como en cada ruta API, evitando duplicar reglas de negocio.
+La lógica de permisos vive centralizada en src/lib/permisos.ts. Las funciones puedeVerFichaCompleta, puedeCrearInformes y puedeEditarFicha comparten la misma regla base: los roles de ROLES_ACCESO_COMPLETO (dirección, coordinación, psicólogo, trabajador social) siempre tienen acceso; un educador solo lo tiene si es el tutor asignado del menor concreto (comparando usuarioId con tutorEducativoId); y ATE queda fuera de la ficha completa. Esta comprobación se aplica tanto en el frontend (mostrar/ocultar UI) como en cada ruta API, evitando duplicar reglas de negocio.
 
 ---
 
@@ -364,4 +363,4 @@ Este proyecto maneja datos especialmente sensibles de menores:
 DAM (Desarrollo de Aplicaciones Multiplataforma) · AWS Cloud Practitioner
 Stack: TypeScript · Next.js · PostgreSQL · Prisma · React
 
-[GitHub](https://github.com/sarukiii) · [LinkedIn]([(https://www.linkedin.com/in/sara-lopez-reina/)])
+[GitHub](https://github.com/sarukiii) · [LinkedIn](https://www.linkedin.com/in/sara-lopez-reina/)
