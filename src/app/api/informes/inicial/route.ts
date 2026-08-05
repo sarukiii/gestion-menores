@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server"; // Next.js abstrae la petición y respuesta HTTP en objetos más fáciles de usar
 import { prisma } from "@/lib/prisma"; // Prisma Client para acceder a la base de datos
 import { auth } from "@/lib/auth"; // función que obtiene la sesión del usuario desde el servidor
+import { puedeCrearInformes } from "@/lib/permisos"; // control de acceso centralizado — misma regla que en la ficha del menor
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/informes/inicial?menorId=xxx
@@ -90,6 +91,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "El menor y el motivo de ingreso son obligatorios" },
         { status: 400 },
+      );
+    }
+
+    // CONTROL DE ACCESO — buscamos el menor para conocer su tutorEducativoId
+    // y aplicar la misma regla de permisos que usa la ficha del menor.
+    // Sin esto, la UI oculta el botón pero la API seguiría aceptando la
+    // petición de cualquier usuario autenticado (el bug de seguridad original).
+    const menor = await prisma.menor.findUnique({
+      where: { id: datos.menorId },
+      select: { tutorEducativoId: true },
+    });
+
+    if (!menor) {
+      return NextResponse.json(
+        { error: "Menor no encontrado" },
+        { status: 404 },
+      );
+    }
+
+    const tieneAcceso = puedeCrearInformes({
+      rolUsuario: session.user.rol,
+      usuarioId: session.user.id,
+      tutorEducativoId: menor.tutorEducativoId,
+    });
+
+    if (!tieneAcceso) {
+      return NextResponse.json(
+        { error: "No tienes permisos para crear informes de este menor" },
+        { status: 403 },
       );
     }
 

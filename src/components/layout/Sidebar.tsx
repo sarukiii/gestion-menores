@@ -7,8 +7,8 @@
 // cambio en la navegación se refleja en toda la app automáticamente.
 //
 // Es un Client Component ("use client") porque contiene interactividad
-// del lado del cliente — en este caso el formulario de logout que usa
-// un Server Action importado dinámicamente.
+// del lado del cliente: el botón de logout, que llama a signOut() de
+// NextAuth directamente desde el navegador.
 //
 // NOTA TÉCNICA: usePathname() causaba un conflicto con Next.js 16 +
 // Turbopack al importarse en la cadena Server Component → Client Component.
@@ -17,15 +17,7 @@
 // por ahora y añadirlo cuando se estabilice la versión de Next.js.
 
 import Link from "next/link";
-
-// Definición centralizada de los enlaces de navegación.
-// Añadir una nueva sección es tan simple como añadir un objeto aquí.
-
-const navLinks = [
-  { href: "/menores", label: "Menores" },
-  { href: "/seguimientos", label: "Seguimientos" },
-  { href: "/incidencias", label: "Incidencias" },
-];
+import { signOut } from "next-auth/react";
 
 type SidebarProps = {
   nombreUsuario: string;
@@ -45,7 +37,15 @@ export default function Sidebar({ nombreUsuario, rolUsuario }: SidebarProps) {
       </nav>
       <div className="px-4 py-4 border-t border-gray-800">
         <p className="text-white text-sm">{nombreUsuario}</p>
-        <p className="text-gray-400 text-xs">{rolUsuario}</p>
+        <p className="text-gray-400 text-xs mb-3">{rolUsuario}</p>
+        {/* Botón de logout — signOut() de next-auth/react cierra la sesión
+            del lado del cliente y redirige al login (pages.signIn en auth.config.ts) */}
+        <button
+          onClick={() => signOut({ callbackUrl: "/" })}
+          className="w-full text-left text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg px-2 py-1.5 transition-colors"
+        >
+          Cerrar sesión
+        </button>
       </div>
     </aside>
   );

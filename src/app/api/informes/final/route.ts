@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { puedeCrearInformes } from "@/lib/permisos";
 
 // GET /api/informes/final?menorId=xxx
 export async function GET(request: NextRequest) {
@@ -57,6 +58,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "El menor es obligatorio" },
         { status: 400 },
+      );
+    }
+
+    // CONTROL DE ACCESO — misma regla que en la ficha del menor
+    const menor = await prisma.menor.findUnique({
+      where: { id: datos.menorId },
+      select: { tutorEducativoId: true },
+    });
+
+    if (!menor) {
+      return NextResponse.json(
+        { error: "Menor no encontrado" },
+        { status: 404 },
+      );
+    }
+
+    const tieneAcceso = puedeCrearInformes({
+      rolUsuario: session.user.rol,
+      usuarioId: session.user.id,
+      tutorEducativoId: menor.tutorEducativoId,
+    });
+
+    if (!tieneAcceso) {
+      return NextResponse.json(
+        { error: "No tienes permisos para crear informes de este menor" },
+        { status: 403 },
       );
     }
 
