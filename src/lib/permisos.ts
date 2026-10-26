@@ -10,8 +10,17 @@
 // COORDINACION   → acceso completo a todo
 // PSICOLOGO      → acceso completo a todo
 // TRABAJADOR_SOCIAL → acceso completo a todo
-// EDUCADOR       → acceso completo SOLO a los menores que tiene asignados como tutor
+// EDUCADOR       → acceso completo SOLO a los menores que tiene asignados como tutor.
+//                  En el resto de menores tiene acceso básico (igual que ATE):
+//                  puede ver los datos generales y registrar incidencias.
 // ATE            → acceso básico: ver ficha del menor y crear incidencias
+//
+// CAMBIO DE ESTA VERSIÓN:
+// Antes, un educador que no era tutor de un menor recibía un error al abrir su
+// ficha, y no podía registrar una incidencia. Pero un educador de turno puede
+// presenciar un hecho con cualquier menor del centro, así que ahora tiene el
+// mismo acceso básico que el ATE. Se añade `puedeVerFichaBasica` para
+// expresar esa regla en un solo sitio.
 
 // Roles que tienen acceso completo a todos los menores sin restricción
 // Definido como array constante para poder usarlo en comprobaciones
@@ -25,6 +34,11 @@ export const ROLES_ACCESO_COMPLETO = [
 
 // Tipo derivado del array anterior — evita errores de tipado al comparar roles
 type RolAccesoCompleto = (typeof ROLES_ACCESO_COMPLETO)[number];
+
+// Todos los roles que existen en el sistema: los de acceso completo,
+// más el educador y el ATE. Sirve para rechazar roles desconocidos
+// (por ejemplo, si algún día un dato corrupto trae un rol inventado).
+const ROLES_VALIDOS = [...ROLES_ACCESO_COMPLETO, "EDUCADOR", "ATE"] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // puedeVerFichaCompleta
@@ -50,14 +64,30 @@ export function puedeVerFichaCompleta({
     return true;
   }
 
-  // El educador solo puede ver la ficha si es el tutor asignado de ese menor
-  // Comparamos IDs para verificar la asignación
+  // El educador solo puede ver la ficha completa si es el tutor asignado
+  // de ese menor. Comparamos IDs para verificar la asignación.
   if (rolUsuario === "EDUCADOR") {
     return tutorEducativoId === usuarioId;
   }
 
-  // ATE solo tiene acceso básico — no puede ver la ficha completa
+  // ATE, y el educador que no es tutor, solo tienen acceso básico:
+  // no pueden ver la ficha completa
   return false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// puedeVerFichaBasica
+// Determina si un usuario puede ver los datos generales de un menor
+// (nombre, expediente, medida, datos del tutor legal...) sin datos sensibles.
+//
+// Cualquier rol del sistema puede hacerlo: así un educador de turno, aunque
+// no sea el tutor del menor, puede entrar a registrar una incidencia.
+// Un rol desconocido NO tiene acceso.
+// ─────────────────────────────────────────────────────────────────────────────
+export function puedeVerFichaBasica(rolUsuario: string): boolean {
+  // Convertimos el array de literales a string[] solo para poder usar
+  // .includes() con un rol que llega como string cualquiera
+  return (ROLES_VALIDOS as readonly string[]).includes(rolUsuario);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -3,17 +3,33 @@
 // Además de las operaciones CRUD, este archivo aplica el control de acceso
 // por rol usando las funciones centralizadas de src/lib/permisos.ts.
 //
-// Un usuario solo puede ver o editar un menor si:
-// - Tiene un rol con acceso completo (DIRECCION, COORDINACION, PSICOLOGO, TRABAJADOR_SOCIAL)
-// - Es EDUCADOR y tiene ese menor asignado como tutor
-// - Es ATE (solo acceso básico — ver ficha, no editar)
+// Un usuario puede VER un menor así:
+// - Acceso completo: DIRECCION, COORDINACION, PSICOLOGO, TRABAJADOR_SOCIAL,
+//   y el EDUCADOR que es tutor asignado de ese menor
+// - Acceso básico: ATE y el EDUCADOR que NO es su tutor (datos generales,
+//   sin información sensible; pueden registrar incidencias)
+//
+// Un usuario puede EDITAR un menor solo con acceso completo.
+//
+// CAMBIO DE ESTA VERSIÓN:
+// Antes, el educador que no era tutor recibía un 403 y la pantalla mostraba
+// "No se pudo cargar la ficha". Ahora recibe la versión básica. Lo importante
+// de la seguridad no cambia: los datos sensibles (salud, diagnóstico,
+// medicación, perfil psicológico...) SOLO salen del servidor para quien
+// tiene acceso completo. Esconder campos en la pantalla no basta, porque
+// cualquiera puede ver la respuesta en la pestaña Red del navegador.
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { puedeVerFichaCompleta, puedeEditarFicha } from "@/lib/permisos";
+import {
+  puedeVerFichaCompleta,
+  puedeVerFichaBasica,
+  puedeEditarFicha,
+} from "@/lib/permisos";
 
-// GET /api/menores/[id] — Devuelve la ficha completa de un menor
+// GET /api/menores/[id] — Devuelve la ficha de un menor,
+// completa o básica según el rol y la asignación del usuario
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -37,42 +53,45 @@ export async function GET(
 
   // Comprobamos si el usuario tiene acceso a la ficha completa
   // usando la lógica centralizada de permisos
-  const tieneAcceso = puedeVerFichaCompleta({
+  const tieneAccesoCompleto = puedeVerFichaCompleta({
     rolUsuario: session.user.rol,
     usuarioId: session.user.id,
     tutorEducativoId: menor.tutorEducativoId ?? null,
   });
 
-  // ATE tiene acceso básico — puede ver la ficha pero con datos limitados
-  // El resto de roles sin acceso reciben un 403 Forbidden
-  if (!tieneAcceso && session.user.rol !== "ATE") {
+  // 1. Acceso completo → devolvemos toda la ficha
+  if (tieneAccesoCompleto) {
+    return NextResponse.json(menor);
+  }
+
+  // 2. Sin acceso completo: comprobamos que al menos sea un rol válido.
+  // Un rol desconocido no recibe nada (403 Forbidden).
+  if (!puedeVerFichaBasica(session.user.rol)) {
     return NextResponse.json(
       { error: "No tienes acceso a este menor" },
       { status: 403 },
     );
   }
 
-  // Si es ATE devolvemos solo los campos básicos — no datos sensibles
+  // 3. Acceso básico (ATE y educador que no es tutor):
+  // devolvemos solo los campos generales — no datos sensibles
   // como salud mental, perfil psicológico o diagnósticos
-  if (session.user.rol === "ATE") {
-    return NextResponse.json({
-      id: menor.id,
-      nombre: menor.nombre,
-      apellidos: menor.apellidos,
-      expediente: menor.expediente,
-      tipoMedida: menor.tipoMedida,
-      estadoMedida: menor.estadoMedida,
-      fechaInicio: menor.fechaInicio,
-      fechaFin: menor.fechaFin,
-      tutorNombre: menor.tutorNombre,
-      tutorTelefono: menor.tutorTelefono,
-      tutorRelacion: menor.tutorRelacion,
-      // No incluimos: salud mental, diagnóstico, perfil psicológico, etc.
-    });
-  }
-
-  // Para el resto de roles con acceso completo, devolvemos toda la ficha
-  return NextResponse.json(menor);
+  return NextResponse.json({
+    id: menor.id,
+    nombre: menor.nombre,
+    apellidos: menor.apellidos,
+    expediente: menor.expediente,
+    tipoMedida: menor.tipoMedida,
+    estadoMedida: menor.estadoMedida,
+    fechaInicio: menor.fechaInicio,
+    fechaFin: menor.fechaFin,
+    tutorNombre: menor.tutorNombre,
+    tutorTelefono: menor.tutorTelefono,
+    tutorRelacion: menor.tutorRelacion,
+    // No incluimos: DNI, domicilio, educación, salud, salud mental,
+    // diagnóstico, medicación, perfil psicológico, etc.
+    // Tampoco tutorEducativoId: no hace falta para el modo básico.
+  });
 }
 
 // PUT /api/menores/[id] — Actualiza los datos de un menor
@@ -96,7 +115,8 @@ export async function PUT(
     return NextResponse.json({ error: "Menor no encontrado" }, { status: 404 });
   }
 
-  // Comprobamos si puede editar — ATE no puede editar aunque pueda ver
+  // Comprobamos si puede editar — con acceso básico (ATE, o educador que
+  // no es tutor) se puede ver pero no editar
   const tieneAcceso = puedeEditarFicha({
     rolUsuario: session.user.rol,
     usuarioId: session.user.id,

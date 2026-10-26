@@ -4,19 +4,22 @@
 //
 // Además de mostrar y editar la ficha, ahora aplica control de acceso por rol:
 // - DIRECCION, COORDINACION, PSICOLOGO, TRABAJADOR_SOCIAL → acceso completo
-// - EDUCADOR → acceso completo solo si es el tutor asignado del menor
+// - EDUCADOR → acceso completo solo si es el tutor asignado del menor;
+//   si no lo es, acceso básico (igual que ATE)
 // - ATE → acceso básico: solo datos generales e incidencias
 //
 // COORDINACION y DIRECCION pueden además asignar el tutor educativo del menor
 // desde un selector que aparece en la cabecera de la ficha.
 //
-// CAMBIOS DE ESTA VERSIÓN (limpieza de lint):
-// 1. Se elimina `useRouter` y la variable `router`, que nunca se usaban
-//    (aviso: no-unused-vars). Código que no se usa es ruido: quien lo lee
-//    piensa que hace algo.
-// 2. Se sustituyen los 4 `any` por el tipo `InformeApi`, que describe la forma
-//    de lo que devuelven las rutas /api/informes/*. Así TypeScript vuelve a
-//    vigilar esa parte del código (errores: no-explicit-any).
+// CAMBIOS DE ESTA VERSIÓN:
+// 1. Mensajes de error claros al cargar la ficha, según el código que devuelve
+//    la API (401, 403, 404...), en vez de un único "No se pudo cargar".
+// 2. En modo básico (ATE, o educador que no es tutor) la pantalla solo muestra
+//    los campos que la API realmente envía. Antes salían DNI, domicilio, etc.
+//    con un guion "—", que parecía "sin datos" cuando en realidad era
+//    "sin permiso".
+// 3. El aviso de acceso básico se muestra a todo el que lo tenga, no solo al ATE,
+//    y la sección de informes explica por qué no hay lista.
 
 import { useState, useEffect } from "react";
 // CAMBIO: antes se importaba también `useRouter`; ya no hace falta.
@@ -123,6 +126,15 @@ const etiquetasExtraordinario: Record<string, string> = {
   OTRO: "Otro",
 };
 
+// Traduce el código de estado de la API a un mensaje que entienda la persona.
+// Un buen mensaje de error dice QUÉ pasó y, si se puede, QUÉ hacer.
+function mensajeErrorCarga(estado: number): string {
+  if (estado === 401) return "Tu sesión ha caducado. Vuelve a iniciar sesión.";
+  if (estado === 403) return "No tienes permiso para ver la ficha de este menor.";
+  if (estado === 404) return "No se ha encontrado la ficha de este menor.";
+  return "No se pudo cargar la ficha. Inténtalo de nuevo en unos minutos.";
+}
+
 function formatearFecha(fecha: string | null): string {
   if (!fecha) return "";
   return new Date(fecha).toLocaleDateString("es-ES");
@@ -206,7 +218,7 @@ export default function FichaMenorPage() {
     const cargarDatos = async () => {
       const respuestaMenor = await fetch(`/api/menores/${id}`);
       if (!respuestaMenor.ok) {
-        setError("No se pudo cargar la ficha del menor");
+        setError(mensajeErrorCarga(respuestaMenor.status));
         setCargando(false);
         return;
       }
@@ -465,10 +477,12 @@ export default function FichaMenorPage() {
           </div>
         )}
 
-        {/* AVISO PARA ATE — acceso básico */}
-        {session.user.rol === "ATE" && (
+        {/* AVISO DE ACCESO BÁSICO — ATE y educador que no es tutor del menor */}
+        {!accesoCompleto && (
           <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-sm rounded-lg px-4 py-3 mb-4">
-            Tienes acceso básico a esta ficha. Solo puedes ver datos generales y registrar incidencias.
+            {session.user.rol === "EDUCADOR"
+              ? "Tienes acceso básico a esta ficha porque no eres su tutor/a. Puedes ver los datos generales y registrar incidencias."
+              : "Tienes acceso básico a esta ficha. Solo puedes ver datos generales y registrar incidencias."}
           </div>
         )}
 
@@ -478,11 +492,11 @@ export default function FichaMenorPage() {
           <Seccion titulo="Datos personales">
             <Campo label="Nombre" valor={menor.nombre} campo="nombre" editando={editando && puedeEditar} onChange={actualizarCampo} />
             <Campo label="Apellidos" valor={menor.apellidos} campo="apellidos" editando={editando && puedeEditar} onChange={actualizarCampo} />
-            <Campo label="Fecha de nacimiento" valor={menor.fechaNacimiento} campo="fechaNacimiento" tipo="date" editando={editando && puedeEditar} onChange={actualizarCampo} />
-            <Campo label="DNI" valor={menor.dni} campo="dni" editando={editando && puedeEditar} onChange={actualizarCampo} />
-            <Campo label="Nacionalidad" valor={menor.nacionalidad} campo="nacionalidad" editando={editando && puedeEditar} onChange={actualizarCampo} />
-            <Campo label="Domicilio" valor={menor.domicilio} campo="domicilio" editando={editando && puedeEditar} onChange={actualizarCampo} />
-            <Campo label="Teléfono" valor={menor.telefono} campo="telefono" editando={editando && puedeEditar} onChange={actualizarCampo} />
+            {accesoCompleto && <Campo label="Fecha de nacimiento" valor={menor.fechaNacimiento} campo="fechaNacimiento" tipo="date" editando={editando && puedeEditar} onChange={actualizarCampo} />}
+            {accesoCompleto && <Campo label="DNI" valor={menor.dni} campo="dni" editando={editando && puedeEditar} onChange={actualizarCampo} />}
+            {accesoCompleto && <Campo label="Nacionalidad" valor={menor.nacionalidad} campo="nacionalidad" editando={editando && puedeEditar} onChange={actualizarCampo} />}
+            {accesoCompleto && <Campo label="Domicilio" valor={menor.domicilio} campo="domicilio" editando={editando && puedeEditar} onChange={actualizarCampo} />}
+            {accesoCompleto && <Campo label="Teléfono" valor={menor.telefono} campo="telefono" editando={editando && puedeEditar} onChange={actualizarCampo} />}
           </Seccion>
 
           <Seccion titulo="Medida judicial">
@@ -490,21 +504,23 @@ export default function FichaMenorPage() {
             <Campo label="Tipo de medida" valor={menor.tipoMedida} campo="tipoMedida" editando={editando && puedeEditar} onChange={actualizarCampo} />
             <Campo label="Fecha de inicio" valor={menor.fechaInicio} campo="fechaInicio" tipo="date" editando={editando && puedeEditar} onChange={actualizarCampo} />
             <Campo label="Fecha de fin" valor={menor.fechaFin} campo="fechaFin" tipo="date" editando={editando && puedeEditar} onChange={actualizarCampo} />
-            <Campo label="Juzgado" valor={menor.juzgado} campo="juzgado" editando={editando && puedeEditar} onChange={actualizarCampo} />
+            {accesoCompleto && <Campo label="Juzgado" valor={menor.juzgado} campo="juzgado" editando={editando && puedeEditar} onChange={actualizarCampo} />}
           </Seccion>
 
           <Seccion titulo="Familia">
             <Campo label="Nombre del tutor/a" valor={menor.tutorNombre} campo="tutorNombre" editando={editando && puedeEditar} onChange={actualizarCampo} />
             <Campo label="Teléfono del tutor/a" valor={menor.tutorTelefono} campo="tutorTelefono" editando={editando && puedeEditar} onChange={actualizarCampo} />
             <Campo label="Relación con el menor" valor={menor.tutorRelacion} campo="tutorRelacion" editando={editando && puedeEditar} onChange={actualizarCampo} />
-            <Campo label="Situación familiar" valor={menor.situacionFamiliar} campo="situacionFamiliar" editando={editando && puedeEditar} onChange={actualizarCampo} />
+            {accesoCompleto && <Campo label="Situación familiar" valor={menor.situacionFamiliar} campo="situacionFamiliar" editando={editando && puedeEditar} onChange={actualizarCampo} />}
           </Seccion>
 
-          <Seccion titulo="Educación">
-            <Campo label="Centro educativo" valor={menor.centroEducativo} campo="centroEducativo" editando={editando && puedeEditar} onChange={actualizarCampo} />
-            <Campo label="Curso / nivel" valor={menor.cursoNivel} campo="cursoNivel" editando={editando && puedeEditar} onChange={actualizarCampo} />
-            <Campo label="Situación escolar" valor={menor.situacionEscolar} campo="situacionEscolar" editando={editando && puedeEditar} onChange={actualizarCampo} />
-          </Seccion>
+          {accesoCompleto && (
+            <Seccion titulo="Educación">
+              <Campo label="Centro educativo" valor={menor.centroEducativo} campo="centroEducativo" editando={editando && puedeEditar} onChange={actualizarCampo} />
+              <Campo label="Curso / nivel" valor={menor.cursoNivel} campo="cursoNivel" editando={editando && puedeEditar} onChange={actualizarCampo} />
+              <Campo label="Situación escolar" valor={menor.situacionEscolar} campo="situacionEscolar" editando={editando && puedeEditar} onChange={actualizarCampo} />
+            </Seccion>
+          )}
 
           {/* Secciones sensibles — solo visibles con acceso completo */}
           {accesoCompleto && (
@@ -569,7 +585,11 @@ export default function FichaMenorPage() {
               )}
             </div>
 
-            {informes.length === 0 ? (
+            {!accesoCompleto ? (
+              <p className="text-gray-400 text-sm">
+                Los informes de este menor solo los ven su tutor/a y el equipo técnico. Desde aquí puedes registrar incidencias.
+              </p>
+            ) : informes.length === 0 ? (
               <p className="text-gray-400 text-sm">No hay informes registrados todavía.</p>
             ) : (
               <div className="space-y-2">
