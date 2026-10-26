@@ -9,9 +9,18 @@
 //
 // COORDINACION y DIRECCION pueden además asignar el tutor educativo del menor
 // desde un selector que aparece en la cabecera de la ficha.
+//
+// CAMBIOS DE ESTA VERSIÓN (limpieza de lint):
+// 1. Se elimina `useRouter` y la variable `router`, que nunca se usaban
+//    (aviso: no-unused-vars). Código que no se usa es ruido: quien lo lee
+//    piensa que hace algo.
+// 2. Se sustituyen los 4 `any` por el tipo `InformeApi`, que describe la forma
+//    de lo que devuelven las rutas /api/informes/*. Así TypeScript vuelve a
+//    vigilar esa parte del código (errores: no-explicit-any).
 
 import { useState, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
+// CAMBIO: antes se importaba también `useRouter`; ya no hace falta.
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import {
@@ -65,6 +74,24 @@ type InformeResumen = {
   motivoIngreso?: string;
   periodo?: string;
   tipoExtraordinario?: string;
+};
+
+// CAMBIO (nuevo): forma de un informe TAL COMO LLEGA de la API, antes de que
+// le añadamos nuestra etiqueta `tipo` ("Inicial", "Seguimiento"...).
+//
+// Analogía: es la etiqueta de la caja cuando llega del almacén. Ya sabemos
+// qué lleva dentro (id, fecha, usuario...), así que no hace falta un "cosas".
+//
+// Ojo con `tipo`: solo lo envía la API de informes extraordinarios (el tipo
+// de incidencia: SALUD_MENTAL, EMBARAZO...). Por eso es opcional. Más abajo
+// lo copiamos a `tipoExtraordinario` y lo sobrescribimos con nuestra etiqueta.
+type InformeApi = {
+  id: string;
+  fecha: string;
+  usuario: { nombre: string; rol: string };
+  motivoIngreso?: string;
+  periodo?: string;
+  tipo?: string;
 };
 
 // Tipo para los educadores disponibles para asignar como tutor
@@ -142,7 +169,7 @@ function Seccion({ titulo, children }: { titulo: string; children: React.ReactNo
 }
 
 export default function FichaMenorPage() {
-  const router = useRouter();
+  // CAMBIO: aquí estaba `const router = useRouter();` (nunca se usaba).
   const params = useParams();
   const id = params.id as string;
 
@@ -164,6 +191,18 @@ export default function FichaMenorPage() {
   const [tutorSeleccionado, setTutorSeleccionado] = useState<string>("");
 
   useEffect(() => {
+    // CAMBIO (nuevo): función auxiliar que lee la lista de una respuesta.
+    // Es el ÚNICO punto donde afirmamos "lo que llega tiene forma de
+    // InformeApi[]". `respuesta.json()` siempre devuelve `any` por defecto,
+    // así que aquí damos la cara una sola vez con un tipo explícito, en lugar
+    // de repartir `any` por cada .map(). Si la respuesta falla, lista vacía.
+    //
+    // Nota para el futuro: un tipo en TypeScript es una promesa, no una
+    // garantía en tiempo de ejecución. Si algún día quieres validar de verdad
+    // lo que manda el servidor, la librería habitual para eso es zod.
+    const leerLista = async (respuesta: Response): Promise<InformeApi[]> =>
+      respuesta.ok ? ((await respuesta.json()) as InformeApi[]) : [];
+
     const cargarDatos = async () => {
       const respuestaMenor = await fetch(`/api/menores/${id}`);
       if (!respuestaMenor.ok) {
@@ -183,20 +222,29 @@ export default function FichaMenorPage() {
           fetch(`/api/informes/final?menorId=${id}`),
         ]);
 
-      const iniciales = resIniciales.ok
-        ? (await resIniciales.json()).map((i: any) => ({ ...i, tipo: "Inicial" as const }))
-        : [];
-      const seguimiento = resSeguimiento.ok
-        ? (await resSeguimiento.json()).map((i: any) => ({ ...i, tipo: "Seguimiento" as const }))
-        : [];
-      const extraordinario = resExtraordinario.ok
-        ? (await resExtraordinario.json()).map((i: any) => ({
-            ...i, tipo: "Extraordinario" as const, tipoExtraordinario: i.tipo,
-          }))
-        : [];
-      const final = resFinal.ok
-        ? (await resFinal.json()).map((i: any) => ({ ...i, tipo: "Final" as const }))
-        : [];
+      // Leemos las cuatro listas ya tipadas
+      const [listaIniciales, listaSeguimiento, listaExtraordinario, listaFinal] =
+        await Promise.all([
+          leerLista(resIniciales),
+          leerLista(resSeguimiento),
+          leerLista(resExtraordinario),
+          leerLista(resFinal),
+        ]);
+
+      // CAMBIO: `(i: any)` pasa a ser `(i)`. TypeScript ya sabe que `i` es un
+      // InformeApi porque la lista viene tipada, así que infiere el tipo solo.
+      // Ventaja: si escribes mal un campo (por ejemplo `i.fehca`), ahora te
+      // avisa. Con `any` no lo hacía.
+      const iniciales = listaIniciales.map((i) => ({ ...i, tipo: "Inicial" as const }));
+      const seguimiento = listaSeguimiento.map((i) => ({ ...i, tipo: "Seguimiento" as const }));
+      const extraordinario = listaExtraordinario.map((i) => ({
+        ...i,
+        tipo: "Extraordinario" as const,
+        // La API manda aquí el tipo concreto (SALUD_MENTAL...) en `tipo`;
+        // lo guardamos en otro campo antes de que nuestra etiqueta lo pise.
+        tipoExtraordinario: i.tipo,
+      }));
+      const final = listaFinal.map((i) => ({ ...i, tipo: "Final" as const }));
 
       const todos = [...iniciales, ...seguimiento, ...extraordinario, ...final]
         .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
