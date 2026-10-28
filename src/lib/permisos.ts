@@ -12,15 +12,11 @@
 // TRABAJADOR_SOCIAL → acceso completo a todo
 // EDUCADOR       → acceso completo SOLO a los menores que tiene asignados como tutor.
 //                  En el resto de menores tiene acceso básico (igual que ATE):
-//                  puede ver los datos generales y registrar incidencias.
+//                  puede ver los datos generales y registrar incidencias
+//                  (un educador de turno puede presenciar un hecho con cualquier menor).
 // ATE            → acceso básico: ver ficha del menor y crear incidencias
 //
-// CAMBIO DE ESTA VERSIÓN:
-// Antes, un educador que no era tutor de un menor recibía un error al abrir su
-// ficha, y no podía registrar una incidencia. Pero un educador de turno puede
-// presenciar un hecho con cualquier menor del centro, así que ahora tiene el
-// mismo acceso básico que el ATE. Se añade `puedeVerFichaBasica` para
-// expresar esa regla en un solo sitio.
+// ALTA DE MENORES → solo DIRECCION y COORDINACION
 
 // Roles que tienen acceso completo a todos los menores sin restricción
 // Definido como array constante para poder usarlo en comprobaciones
@@ -126,6 +122,16 @@ export function puedeCrearIncidencias(): boolean {
 // debe estar restringida a roles de gestión.
 // ─────────────────────────────────────────────────────────────────────────────
 export function puedeAsignarTutor(rolUsuario: string): boolean {
+  return ["COORDINACION", "DIRECCION"].includes(rolUsuario);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// puedeCrearMenores
+// Solo dirección y coordinación pueden dar de alta a un menor nuevo.
+// Hoy coincide con quién puede asignar tutores, pero es una regla distinta
+// (puede cambiar por separado), así que tiene su propia función.
+// ─────────────────────────────────────────────────────────────────────────────
+export function puedeCrearMenores(rolUsuario: string): boolean {
   return ["COORDINACION", "DIRECCION"].includes(rolUsuario);
 }
 

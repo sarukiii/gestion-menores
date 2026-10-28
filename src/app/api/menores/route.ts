@@ -3,10 +3,19 @@
 // Esta ruta vive en /api/menores y gestiona las operaciones sobre
 // la colección completa de menores.
 // Las operaciones sobre un menor concreto van en /api/menores/[id]/route.ts
+//
+// El listado indica, para cada menor, si el usuario que lo consulta es su
+// tutor educativo (`esMiTutorado`), para que la pantalla pueda mostrar la
+// insignia "Tu tutoría" sin abrir cada ficha. El dato se calcula AQUÍ, en el
+// servidor: la pantalla recibe un simple verdadero/falso y no necesita
+// conocer el id del tutor de cada menor.
+//
+// El POST (dar de alta un menor) está restringido a DIRECCION y COORDINACION.
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { puedeCrearMenores } from "@/lib/permisos";
 
 // GET /api/menores — Devuelve el listado de todos los menores
 export async function GET() {
@@ -17,7 +26,9 @@ export async function GET() {
   }
 
   // Solo traemos los campos necesarios para el listado
-  // no la ficha completa, que sería innecesariamente pesado
+  // no la ficha completa, que sería innecesariamente pesado.
+  // Pedimos también tutorEducativoId, solo para poder calcular
+  // esMiTutorado. No lo enviaremos tal cual a la pantalla.
   const menores = await prisma.menor.findMany({
     select: {
       id: true,
@@ -27,11 +38,20 @@ export async function GET() {
       tipoMedida: true,
       estadoMedida: true,
       fechaInicio: true,
+      tutorEducativoId: true,
     },
     orderBy: { creadoEn: "desc" },
   });
 
-  return NextResponse.json(menores);
+  // Convertimos cada menor: quitamos tutorEducativoId (el id de otra persona
+  // no hace falta en el listado) y añadimos esMiTutorado.
+  // `...resto` son todos los demás campos, tal cual.
+  const respuesta = menores.map(({ tutorEducativoId, ...resto }) => ({
+    ...resto,
+    esMiTutorado: tutorEducativoId === session.user.id,
+  }));
+
+  return NextResponse.json(respuesta);
 }
 
 // POST /api/menores — Crea un nuevo menor en la base de datos
@@ -39,6 +59,16 @@ export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  // Solo dirección y coordinación pueden dar de alta menores.
+  // Esta comprobación es la que de verdad protege: aunque alguien llame a la
+  // API directamente sin pasar por la pantalla, recibe un 403.
+  if (!puedeCrearMenores(session.user.rol)) {
+    return NextResponse.json(
+      { error: "No tienes permiso para dar de alta menores" },
+      { status: 403 },
+    );
   }
 
   try {

@@ -2,7 +2,7 @@
 
 // page.tsx — Ficha individual de un menor (ruta "/menores/[id]")
 //
-// Además de mostrar y editar la ficha, ahora aplica control de acceso por rol:
+// Además de mostrar y editar la ficha, aplica control de acceso por rol:
 // - DIRECCION, COORDINACION, PSICOLOGO, TRABAJADOR_SOCIAL → acceso completo
 // - EDUCADOR → acceso completo solo si es el tutor asignado del menor;
 //   si no lo es, acceso básico (igual que ATE)
@@ -11,18 +11,16 @@
 // COORDINACION y DIRECCION pueden además asignar el tutor educativo del menor
 // desde un selector que aparece en la cabecera de la ficha.
 //
-// CAMBIOS DE ESTA VERSIÓN:
-// 1. Mensajes de error claros al cargar la ficha, según el código que devuelve
-//    la API (401, 403, 404...), en vez de un único "No se pudo cargar".
+// DETALLES DE DISEÑO:
+// 1. Los errores al cargar la ficha muestran un mensaje claro según el código
+//    que devuelve la API (401, 403, 404...).
 // 2. En modo básico (ATE, o educador que no es tutor) la pantalla solo muestra
-//    los campos que la API realmente envía. Antes salían DNI, domicilio, etc.
-//    con un guion "—", que parecía "sin datos" cuando en realidad era
-//    "sin permiso".
-// 3. El aviso de acceso básico se muestra a todo el que lo tenga, no solo al ATE,
-//    y la sección de informes explica por qué no hay lista.
+//    los campos que la API realmente envía. Mostrar un guion "—" en los demás
+//    parecería "sin datos" cuando en realidad es "sin permiso".
+// 3. El aviso de acceso básico se muestra a todo el que lo tenga, y la sección
+//    de informes explica por qué no hay lista.
 
 import { useState, useEffect } from "react";
-// CAMBIO: antes se importaba también `useRouter`; ya no hace falta.
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -79,7 +77,7 @@ type InformeResumen = {
   tipoExtraordinario?: string;
 };
 
-// CAMBIO (nuevo): forma de un informe TAL COMO LLEGA de la API, antes de que
+// Forma de un informe TAL COMO LLEGA de la API, antes de que
 // le añadamos nuestra etiqueta `tipo` ("Inicial", "Seguimiento"...).
 //
 // Analogía: es la etiqueta de la caja cuando llega del almacén. Ya sabemos
@@ -181,7 +179,6 @@ function Seccion({ titulo, children }: { titulo: string; children: React.ReactNo
 }
 
 export default function FichaMenorPage() {
-  // CAMBIO: aquí estaba `const router = useRouter();` (nunca se usaba).
   const params = useParams();
   const id = params.id as string;
 
@@ -203,7 +200,7 @@ export default function FichaMenorPage() {
   const [tutorSeleccionado, setTutorSeleccionado] = useState<string>("");
 
   useEffect(() => {
-    // CAMBIO (nuevo): función auxiliar que lee la lista de una respuesta.
+    // Función auxiliar que lee la lista de una respuesta.
     // Es el ÚNICO punto donde afirmamos "lo que llega tiene forma de
     // InformeApi[]". `respuesta.json()` siempre devuelve `any` por defecto,
     // así que aquí damos la cara una sola vez con un tipo explícito, en lugar
@@ -243,10 +240,10 @@ export default function FichaMenorPage() {
           leerLista(resFinal),
         ]);
 
-      // CAMBIO: `(i: any)` pasa a ser `(i)`. TypeScript ya sabe que `i` es un
-      // InformeApi porque la lista viene tipada, así que infiere el tipo solo.
-      // Ventaja: si escribes mal un campo (por ejemplo `i.fehca`), ahora te
-      // avisa. Con `any` no lo hacía.
+      // No hace falta anotar el tipo de `i`: TypeScript ya sabe que es un
+      // InformeApi porque la lista viene tipada, así que lo infiere solo.
+      // Ventaja: si escribes mal un campo (por ejemplo `i.fehca`), te avisa.
+      // Con `any` no lo haría.
       const iniciales = listaIniciales.map((i) => ({ ...i, tipo: "Inicial" as const }));
       const seguimiento = listaSeguimiento.map((i) => ({ ...i, tipo: "Seguimiento" as const }));
       const extraordinario = listaExtraordinario.map((i) => ({

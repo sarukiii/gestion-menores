@@ -7,11 +7,26 @@
 // buscador y el filtro — onChange actualiza el estado y React
 // vuelve a renderizar el listado filtrado sin ir al servidor.
 // Los datos se cargan una sola vez al montar el componente.
+//
+// Además de listar y filtrar:
+// 1. Cada menor trae `esMiTutorado` (lo calcula la API). Si el usuario es su
+//    tutor, la fila muestra la insignia "Tu tutoría".
+// 2. Si el usuario tiene al menos una tutoría, aparece un aviso con el número
+//    y una casilla para ver solo esos menores. Si no tiene ninguna, el aviso
+//    no aparece, así que el listado queda igual para el resto de roles.
+// 3. El filtro de tutorías vive en la URL (/menores?tutorias=1). Así el botón
+//    del dashboard puede abrir el listado ya filtrado, y el enlace se puede
+//    guardar o compartir. Leer la URL en un Client Component exige envolverlo
+//    en <Suspense>, por eso el componente se divide en dos al final del archivo.
+// 4. El botón "+ Nuevo menor" solo lo ven dirección y coordinación.
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { puedeCrearMenores } from "@/lib/permisos";
 
 // Tipo para cada menor en el listado
 // Solo los campos necesarios para la tabla — no la ficha completa
@@ -23,6 +38,8 @@ type MenorResumen = {
   tipoMedida: string;
   estadoMedida: string;
   fechaInicio: string;
+  // True si el usuario actual es el tutor educativo de este menor
+  esMiTutorado: boolean;
 };
 
 // Estilos para los badges de estado de medida
@@ -32,7 +49,8 @@ const estiloEstado: Record<string, { texto: string; clase: string }> = {
   FINALIZADA: { texto: "Finalizada", clase: "bg-gray-500/10 text-gray-400" },
 };
 
-export default function MenoresPage() {
+// El contenido real del listado. No se exporta: lo usa MenoresPage, más abajo.
+function MenoresContenido() {
   // Lista completa de menores — se carga una vez desde la API
   const [menores, setMenores] = useState<MenorResumen[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -41,6 +59,24 @@ export default function MenoresPage() {
   // Estos estados controlan qué menores se muestran en la tabla
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("TODOS");
+
+  // El filtro "solo mis tutorías" se lee de la URL (?tutorias=1)
+  // en vez de guardarse en un estado. Así hay una única fuente de verdad:
+  // si la URL dice tutorias=1 se filtra, y si no, no.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const soloMisTutorias = searchParams.get("tutorias") === "1";
+
+  // Cambiar el filtro = cambiar la URL. `replace` no llena el historial del
+  // navegador con un paso por cada vez que se marca o desmarca la casilla.
+  const cambiarSoloMisTutorias = (activo: boolean) => {
+    router.replace(activo ? `${pathname}?tutorias=1` : pathname);
+  };
+
+  // Solo dirección y coordinación ven el botón de dar de alta
+  const { data: session } = useSession();
+  const puedeCrear = session?.user ? puedeCrearMenores(session.user.rol) : false;
 
   // Cargamos todos los menores al montar el componente
   // El filtrado se hace en el cliente — no hace falta volver al servidor
@@ -55,6 +91,9 @@ export default function MenoresPage() {
     };
     cargarMenores();
   }, []);
+
+  // Cuántos menores tiene el usuario como tutor
+  const numMisTutorias = menores.filter((menor) => menor.esMiTutorado).length;
 
   // FILTRADO EN EL CLIENTE
   // Aplicamos búsqueda y filtro de estado sobre la lista completa
@@ -71,8 +110,11 @@ export default function MenoresPage() {
     const coincideEstado =
       filtroEstado === "TODOS" || menor.estadoMedida === filtroEstado;
 
-    // Solo mostramos el menor si cumple AMBAS condiciones
-    return coincideBusqueda && coincideEstado;
+    // Si la casilla está marcada, solo los menores de los que soy tutor
+    const coincideTutoria = !soloMisTutorias || menor.esMiTutorado;
+
+    // Solo mostramos el menor si cumple TODAS las condiciones
+    return coincideBusqueda && coincideEstado && coincideTutoria;
   });
 
   return (
@@ -90,13 +132,34 @@ export default function MenoresPage() {
                 : `${menoresFiltrados.length} de ${menores.length} ${menores.length === 1 ? "menor" : "menores"}`}
             </p>
           </div>
-          <Link
-            href="/menores/nuevo"
-            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors"
-          >
-            + Nuevo menor
-          </Link>
+          {puedeCrear && (
+            <Link
+              href="/menores/nuevo"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors"
+            >
+              + Nuevo menor
+            </Link>
+          )}
         </div>
+
+        {/* AVISO DE TUTORÍAS
+            Solo aparece si el usuario es tutor de algún menor.
+            Le dice cuántos son y le deja filtrarlos con una casilla. */}
+        {!cargando && numMisTutorias > 0 && (
+          <div className="bg-blue-500/10 border border-blue-500/20 text-blue-300 text-sm rounded-lg px-4 py-3 mb-4 flex items-center justify-between gap-3 flex-wrap">
+            <span>
+              Eres tutor/a de {numMisTutorias} {numMisTutorias === 1 ? "menor" : "menores"}.
+            </span>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={soloMisTutorias}
+                onChange={(e) => cambiarSoloMisTutorias(e.target.checked)}
+              />
+              Mostrar solo mis tutorías
+            </label>
+          </div>
+        )}
 
         {/* BARRA DE BÚSQUEDA Y FILTROS */}
         <div className="flex gap-3 mb-4">
@@ -147,16 +210,24 @@ export default function MenoresPage() {
                 : "No hay menores que coincidan con la búsqueda."}
             </p>
             {menores.length === 0 ? (
-              <Link
-                href="/menores/nuevo"
-                className="text-blue-400 hover:text-blue-300 text-sm font-medium"
-              >
-                Crear el primer registro →
-              </Link>
+              // Solo quien puede dar de alta ve el enlace para crear el primero
+              puedeCrear && (
+                <Link
+                  href="/menores/nuevo"
+                  className="text-blue-400 hover:text-blue-300 text-sm font-medium"
+                >
+                  Crear el primer registro →
+                </Link>
+              )
             ) : (
               // Botón para limpiar los filtros y ver todos los menores
+              // También desmarca la casilla de mis tutorías
               <button
-                onClick={() => { setBusqueda(""); setFiltroEstado("TODOS"); }}
+                onClick={() => {
+                  setBusqueda("");
+                  setFiltroEstado("TODOS");
+                  cambiarSoloMisTutorias(false);
+                }}
                 className="text-blue-400 hover:text-blue-300 text-sm font-medium"
               >
                 Limpiar filtros →
@@ -194,6 +265,12 @@ export default function MenoresPage() {
                         >
                           {menor.nombre} {menor.apellidos}
                         </Link>
+                        {/* Insignia si el usuario es el tutor de este menor */}
+                        {menor.esMiTutorado && (
+                          <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                            Tu tutoría
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-gray-300 text-sm">
                         {menor.expediente}
@@ -218,5 +295,22 @@ export default function MenoresPage() {
         )}
       </div>
     </main>
+  );
+}
+
+// Componente exportado. Next.js exige que un componente que lee la URL
+// con useSearchParams esté dentro de <Suspense>; mientras se resuelve, se
+// muestra el texto de carga.
+export default function MenoresPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="p-8">
+          <p className="text-gray-400">Cargando menores...</p>
+        </main>
+      }
+    >
+      <MenoresContenido />
+    </Suspense>
   );
 }
