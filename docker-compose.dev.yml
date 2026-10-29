@@ -1,0 +1,53 @@
+# docker-compose.dev.yml — Solo la base de datos, para desarrollar en local
+#
+# La aplicación NO va aquí: sigue ejecutándose con "npm run dev" en tu PC.
+# Docker solo aporta una base de datos PostgreSQL limpia y reproducible.
+#
+# Uso (desde la raíz del proyecto):
+#   docker compose -f docker-compose.dev.yml up -d      → arrancar
+#   docker compose -f docker-compose.dev.yml down       → parar (los datos se conservan)
+#   docker compose -f docker-compose.dev.yml logs db    → ver los mensajes
+#
+# ¡Cuidado!: "down -v" (con -v) BORRA los datos de la base de datos.
+#
+# Este archivo es distinto de docker-compose.yml, que es el de producción
+# (app + base de datos juntas). Así no se mezclan.
+
+# Nombre del proyecto: separa estos contenedores y volúmenes de los de
+# docker-compose.yml, para que ninguno pise al otro.
+name: gec-dev
+
+services:
+  db:
+    # Misma versión de PostgreSQL que en producción
+    image: postgres:18-alpine
+    container_name: gec-db-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      # La contraseña se lee del archivo .env (variable POSTGRES_PASSWORD).
+      # Con ":?" Docker se detiene con un mensaje claro si falta, en lugar
+      # de arrancar una base de datos sin contraseña.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en el archivo .env}
+      POSTGRES_DB: gestion_menores
+    ports:
+      # Formato: IP:PUERTO_DE_TU_PC:PUERTO_DEL_CONTENEDOR
+      # - 5433 porque tu PostgreSQL de Windows ya ocupa el 5432
+      # - 127.0.0.1 hace que solo tu propio PC pueda conectarse, no otros
+      #   equipos de la red
+      - "127.0.0.1:5433:5432"
+    volumes:
+      # Volumen con nombre: los datos sobreviven aunque borres el contenedor.
+      # En PostgreSQL 18 el volumen se monta en /var/lib/postgresql
+      # (y no en /var/lib/postgresql/data, como en versiones anteriores).
+      - gec_dev_data:/var/lib/postgresql
+    healthcheck:
+      # Docker comprueba cada pocos segundos si PostgreSQL ya acepta conexiones.
+      # Verás "(healthy)" en "docker ps" cuando esté listo.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gestion_menores"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  gec_dev_data:
