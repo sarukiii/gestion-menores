@@ -1,7 +1,27 @@
+# .dockerignore — Archivos que NO se envían a Docker al construir la imagen
+#
+# Sirve para dos cosas: que la construcción sea más rápida (no se copia lo
+# innecesario) y, sobre todo, que las claves no acaben dentro de la imagen.
+
+# Dependencias y compilados (se generan dentro de la imagen)
 node_modules
 .next
+npm-debug.log*
+
+# Git y editor
 .git
-.env
-.env.local
-npm-debug.log
+.vscode
+
+# SECRETOS: cualquier archivo que empiece por .env
+# (.env, .env.local, .env.backup, .env.backup2...)
+.env*
+
+# Documentación y archivos que la app no necesita
 README.md
+docs
+coverage
+
+# Archivos de Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore

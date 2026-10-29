@@ -1,15 +1,28 @@
-# docker-compose.yml — Orquestación de la app + base de datos
+# docker-compose.yml — Orquestación de la app + base de datos (producción)
 #
 # Docker Compose permite levantar varios contenedores juntos con un
-# solo comando: "docker-compose up"
+# solo comando: "docker compose up"
 #
-# En este caso levantamos:
-# 1. La aplicación Next.js
-# 2. PostgreSQL
+# Levantamos:
+# 1. db       → PostgreSQL
+# 2. migrate  → aplica las migraciones de Prisma y termina (se ejecuta una vez)
+# 3. app      → la aplicación Next.js
+# (4. seed    → opcional, carga usuarios de prueba. No se ejecuta solo.)
 #
 # Para el despliegue en el servidor on-premise de la entidad,
-# solo hay que instalar Docker, copiar estos archivos y ejecutar
-# "docker-compose up -d" para arrancar todo en segundo plano.
+# solo hay que instalar Docker, copiar estos archivos, crear el archivo .env
+# con POSTGRES_PASSWORD, NEXTAUTH_SECRET y NEXTAUTH_URL, y ejecutar:
+#   docker compose up -d --build
+#
+# Para desarrollo en local con "npm run dev", usa docker-compose.dev.yml
+# (solo la base de datos).
+
+name: gestion-menores
+
+# Dirección de la base de datos, definida UNA vez y reutilizada abajo.
+# "db" es el nombre del servicio: Docker lo resuelve como la IP del
+# contenedor de PostgreSQL dentro de su red interna.
+x-database-url: &database-url postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/gestion_menores?schema=public
 
 services:
   # ── BASE DE DATOS ──────────────────────────────────────────────
@@ -18,13 +31,41 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # La contraseña se lee del archivo .env. Con ":?" Docker se detiene
+      # con un mensaje claro si falta.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en el archivo .env}
       POSTGRES_DB: gestion_menores
     volumes:
-      # Volumen persistente — los datos no se pierden al reiniciar el contenedor
-      - postgres_data:/var/lib/postgresql/data
+      # Volumen persistente — los datos no se pierden al reiniciar el contenedor.
+      # En PostgreSQL 18 el volumen se monta en /var/lib/postgresql
+      # (y no en /var/lib/postgresql/data, como en versiones anteriores).
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      # Docker comprueba si PostgreSQL ya acepta conexiones.
+      # Los demás servicios esperan a que esté "healthy".
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gestion_menores"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     # El puerto no se expone al exterior por seguridad
     # Solo la app puede acceder a la BD a través de la red interna de Docker
+
+  # ── MIGRACIONES ────────────────────────────────────────────────
+  # Crea o actualiza las tablas y termina. Usa la etapa "builder" del
+  # Dockerfile porque es la que tiene la herramienta de Prisma instalada
+  # (la imagen final de la app no la lleva, para ser más ligera).
+  migrate:
+    build:
+      context: .
+      target: builder
+    command: npx prisma migrate deploy
+    environment:
+      DATABASE_URL: *database-url
+    depends_on:
+      db:
+        condition: service_healthy
+    # Se ejecuta una vez y no se reinicia
+    restart: "no"
 
   # ── APLICACIÓN ─────────────────────────────────────────────────
   app:
@@ -34,14 +75,47 @@ services:
       # Puerto 3000 del contenedor → Puerto 3000 del servidor
       - "3000:3000"
     environment:
-      # La URL apunta al servicio "db" definido arriba
-      # Docker resuelve el nombre "db" como la IP del contenedor de PostgreSQL
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/gestion_menores?schema=public
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
-      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      DATABASE_URL: *database-url
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Falta NEXTAUTH_SECRET en el archivo .env}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      # Auth.js, en producción, solo acepta la dirección con la que se accede
+      # si se le indica que confíe en ella. Necesario al ejecutar en un servidor
+      # propio. Si cambias NEXTAUTH_URL a la dirección real del servidor,
+      # esta línea se mantiene.
+      AUTH_TRUST_HOST: "true"
     depends_on:
-      # La app espera a que la BD esté lista antes de arrancar
-      - db
+      db:
+        condition: service_healthy
+      migrate:
+        # La app arranca solo cuando las migraciones han terminado bien
+        condition: service_completed_successfully
+    healthcheck:
+      # Comprueba que la app responde. Se usa 127.0.0.1 y no "localhost"
+      # para evitar problemas con IPv6.
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ── DATOS DE PRUEBA (OPCIONAL) ─────────────────────────────────
+  # NO se ejecuta con "up". Solo cuando lo pides:
+  #   docker compose run --rm seed
+  # Crea los usuarios y menores de prueba. No lo uses con datos reales.
+  seed:
+    build:
+      context: .
+      target: builder
+    profiles: ["seed"]
+    command: npx prisma db seed
+    environment:
+      DATABASE_URL: *database-url
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
 
 # Volumen nombrado — Docker gestiona dónde se guardan los datos en el disco
 volumes:
